@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HelioRa Security</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+<div class="container">
+    <!-- Header -->
+    <div class="header">
+        <div class="header-content">
+            <div class="logo-section">
+                <img src="icons/icon48.png" alt="HelioRa" class="logo">
+                <div>
+                    <div class="brand-title">HelioRa</div>
+                    <div class="brand-subtitle">Security Platform</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Security Status - Moved below header -->
+    <div class="security-status status-unknown" id="securityStatus">
+        <div class="status-content">
+            <div class="status-main">
+                <div class="status-indicator" id="statusIndicator">
+                    <div class="pulse-ring"></div>
+                    <span id="statusIcon">●</span>
+                </div>
+                <div class="status-info">
+                    <div class="status-title" id="statusTitle">Analyzing Website...</div>
+                    <div class="status-domain" id="statusDomain">Loading...</div>
+                    <div class="status-description" id="statusDescription">Checking for threats
+                    </div>
+                    <div class="ai-analysis" id="aiAnalysis"
+                         style="display: none; margin-top: 8px; padding: 8px; background: rgba(253, 184, 19, 0.1); border-radius: 4px; font-size: 11px; color: #FDB813; line-height: 1.4;">
+                        <strong>🤖 AI Analysis:</strong> <span id="aiAnalysisText"></span>
+                    </div>
+                </div>
+            </div>
+            <div class="risk-display">
+                <div class="risk-score-large" id="riskScoreLarge">0</div>
+                <div class="risk-label">Risk Score</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Statistics -->
+    <div class="stats-section">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-value" id="adsBlocked">0</div>
+                <div class="stat-label">Ads Blocked</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="trackersBlocked">0</div>
+                <div class="stat-label">Trackers</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="threatsBlocked">0</div>
+                <div class="stat-label">Threats</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Actions -->
+    <div class="quick-actions">
+        <button class="action-btn" id="viewTimelineBtn">
+            <span class="btn-icon">▣</span>
+            <span class="btn-text">Timeline</span>
+        </button>
+        <button class="action-btn" id="exportReportBtn">
+            <span class="btn-icon">↓</span>
+            <span class="btn-text">Export</span>
+        </button>
+        <button class="action-btn danger" id="blacklistBtn">
+            <span class="btn-icon">✕</span>
+            <span class="btn-text">Block</span>
+        </button>
+    </div>
+
+    <!-- Timeline Section -->
+    <div class="timeline-section" id="timelineSection">
+        <div class="timeline-header">
+            <div class="timeline-title">Threat Timeline</div>
+            <button class="btn-clear" id="clearTimelineBtn">Clear</button>
+        </div>
+        <div class="timeline-list" id="timelineList">
+            <div class="empty-state">
+                <p>No events recorded</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs-container">
+        <button class="tab-btn active" data-tab="firewall">Firewall</button>
+        <button class="tab-btn" data-tab="config">Config</button>
+        <button class="tab-btn" data-tab="about">About</button>
+    </div>
+
+    <!-- Tab: Firewall -->
+    <div class="tab-content active" id="tab-firewall">
+        <div class="section">
+            <div class="section-title">Domain Rule</div>
+            <div class="firewall-control">
+                <select id="firewallRuleSelect" class="firewall-select">
+                    <option value="allow">Allow All</option>
+                    <option value="block-tracking">Block Tracking</option>
+                    <option value="block-xhr">Block XHR/Fetch</option>
+                    <option value="block-ads">Block Ads Only</option>
+                    <option value="block-all">Block All</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Blacklisted Domains</div>
+            <div class="domain-list" id="blacklistContainer">
+                <div class="empty-state">
+                    <p>No blacklisted domains</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab: Config -->
+    <div class="tab-content" id="tab-config">
+        <div class="section">
+            <div class="section-title">Security Features</div>
+
+            <div class="toggle-item">
+                <label class="toggle-label">
+                    <div class="toggle-info">
+                        <span class="toggle-text">Threat Detection</span>
+                        <span class="toggle-hint">Real-time website analysis</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="threatDetectionToggle" class="toggle-input"
+                               checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="toggle-item">
+                <label class="toggle-label">
+                    <div class="toggle-info">
+                        <span class="toggle-text">Behavior Detection</span>
+                        <span class="toggle-hint">Monitor suspicious activity</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="behaviorDetectionToggle" class="toggle-input"
+                               checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="toggle-item">
+                <label class="toggle-label">
+                    <div class="toggle-info">
+                        <span class="toggle-text">Network Firewall</span>
+                        <span class="toggle-hint">Apply custom domain rules</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="firewallToggle" class="toggle-input" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+            </div>
+
+            <div class="toggle-item">
+                <label class="toggle-label">
+                    <div class="toggle-info">
+                        <span class="toggle-text">Auto-Block Dangerous Sites</span>
+                        <span class="toggle-hint">Block confirmed threats</span>
+                    </div>
+                    <div class="toggle-switch">
+                        <input type="checkbox" id="autoBlockToggle" class="toggle-input" checked>
+                        <span class="toggle-slider"></span>
+                    </div>
+                </label>
+            </div>
+        </div>
+
+        <div class="section">
+            <button class="btn btn-secondary btn-full" id="resetStatsBtn">Reset Statistics</button>
+            <button class="btn btn-secondary btn-full" id="resetSettingsBtn">Reset Settings</button>
+        </div>
+    </div>
+
+    <!-- Tab: About -->
+    <div class="tab-content" id="tab-about">
+        <div class="section">
+            <div class="section-title">About HelioRa</div>
+            <div class="about-content">
+                <p><strong>Version:</strong> 4.0.0</p>
+                <p><strong>Type:</strong> Enterprise Security Platform</p>
+                <p class="about-description">
+                    HelioRa provides real-time threat intelligence, behavioral malware detection,
+                    and network intrusion detection with forensic reporting capabilities.
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div class="footer-version">HelioRa Security v4.0.0</div>
+        <div class="footer-author">Created by Anshul Saxena</div>
+    </div>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>

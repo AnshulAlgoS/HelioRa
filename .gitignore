@@ -1,0 +1,29 @@
+# Chrome extension metadata
+_metadata/
+
+# Design files
+*.psd
+*.afdesign
+*.sketch
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# IDE
+.idea/
+.vscode/
+*.sublime-*
+
+# Logs
+*.log
+npm-debug.log*
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Node modules (if any)
+node_modules/
