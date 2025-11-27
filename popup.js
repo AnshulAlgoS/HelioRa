@@ -345,10 +345,19 @@ function setupEventListeners() {
         
         if (response?.success) {
           const status = response.enabled ? 'ENABLED' : 'DISABLED';
-          privacyLockdownBtn.classList.toggle('active', response.enabled);
-          privacyLockdownBtn.style.background = response.enabled ? 
-            'linear-gradient(135deg, #c62828 0%, #b71c1c 100%)' : '';
-          showNotification(`Privacy Lockdown ${status}`, 'success');
+          privacyLockdownBtn.classList.toggle('lockdown-active', response.enabled);
+          
+          const btnText = privacyLockdownBtn.querySelector('.btn-text');
+          if (btnText) {
+            btnText.textContent = response.enabled ? 'Locked' : 'Lockdown';
+          }
+          
+          showNotification(
+            response.enabled ? 
+              '🔒 Privacy Lockdown ACTIVE - All camera/mic/GPS blocked' : 
+              'Privacy Lockdown Disabled',
+            response.enabled ? 'warning' : 'success'
+          );
         }
       } catch (error) {
         console.error('[HelioRa Popup] Lockdown error:', error);
