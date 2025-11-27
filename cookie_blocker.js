@@ -24,10 +24,17 @@ class CookieBannerBlocker {
       }
     } catch (err) {
       console.log('[HelioRa Cookie] Using default settings');
+      // Default: auto-decline enabled
+      this.settings.autoCookieDecline = true;
     }
     
-    // If either auto-decline or block cookies is enabled, start blocking
-    if (this.settings.autoCookieDecline || this.settings.blockCookies) {
+    console.log('[HelioRa Cookie] Settings loaded:', this.settings);
+    
+    // ALWAYS block cookie banners by default (unless explicitly disabled)
+    const shouldBlock = this.settings.autoCookieDecline || this.settings.blockCookies;
+    console.log('[HelioRa Cookie] Should block:', shouldBlock);
+    
+    if (shouldBlock) {
       // Inject CSS to hide cookie banners immediately
       this.injectHidingCSS();
       
