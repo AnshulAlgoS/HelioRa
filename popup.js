@@ -316,22 +316,118 @@ function setupEventListeners() {
       try {
         const response = await chrome.runtime.sendMessage({ action: 'exportReport' });
         if (response?.success) {
-          const blob = new Blob([response.data], { type: 'application/json' });
+          // Parse the JSON data
+          const reportData = JSON.parse(response.data);
+          
+          // Generate PDF-style text report
+          const pdfReport = generatePDFReport(reportData);
+          
+          const blob = new Blob([pdfReport], { type: 'text/plain; charset=utf-8' });
           const url = URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = response.filename;
+          a.download = `heliora-security-report-${Date.now()}.txt`;
           a.click();
           URL.revokeObjectURL(url);
           
-          // Show success notification
-          showNotification('Report exported successfully!', 'success');
+          showNotification('Security report exported', 'success');
         }
       } catch (error) {
         console.error('[HelioRa Popup] Export error:', error);
         showNotification('Failed to export report', 'error');
       }
     });
+  }
+  
+  // Generate formatted security report
+  function generatePDFReport(data) {
+    let report = `
+╔══════════════════════════════════════════════════════════════╗
+║              HELIORA SECURITY FORENSIC REPORT               ║
+╚══════════════════════════════════════════════════════════════╝
+
+Generated: ${new Date(data.generatedAt).toLocaleString()}
+Version: ${data.version}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📊 STATISTICS SUMMARY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+• Ads Blocked:        ${data.statistics.adsBlocked}
+• Trackers Blocked:   ${data.statistics.trackersBlocked}
+• Threats Blocked:    ${data.statistics.threatsBlocked}
+• Scripts Blocked:    ${data.statistics.scriptsBlocked}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 ANALYZED DOMAINS (${data.analyzedDomains.length} total)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+
+    data.analyzedDomains.forEach((domain, i) => {
+      const statusIcon = domain.status === 'dangerous' ? '🔴' : 
+                         domain.status === 'suspicious' ? '🟡' : '🟢';
+      
+      report += `\n${i + 1}. ${domain.domain}\n`;
+      report += `   Status: ${statusIcon} ${domain.status.toUpperCase()}\n`;
+      report += `   Risk Score: ${domain.riskScore}/100\n`;
+      report += `   Timestamp: ${new Date(domain.timestamp).toLocaleString()}\n`;
+
+      if (domain.threats && domain.threats.length > 0) {
+        report += `   Threats Detected:\n`;
+        domain.threats.forEach(threat => {
+          report += `      • ${threat}\n`;
+        });
+      }
+    });
+
+    report += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    report += `⚠️  HIGH-RISK DOMAINS DETECTED\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
+
+    const highRiskDomains = data.analyzedDomains.filter(d => d.riskScore >= 60);
+    
+    if (highRiskDomains.length === 0) {
+      report += `\n✓ No high-risk domains detected during this session.\n`;
+    } else {
+      highRiskDomains.forEach((domain, i) => {
+        report += `\n${i + 1}. ${domain.domain}\n`;
+        report += `   Risk Score: ${domain.riskScore}/100 (${domain.status.toUpperCase()})\n`;
+        report += `   Threats:\n`;
+        domain.threats.forEach(threat => {
+          report += `      • ${threat}\n`;
+        });
+      });
+    }
+
+    report += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    report += `🚫 BLOCKED DOMAINS (${data.blockedDomains.length} total)\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+    data.blockedDomains.forEach((domain, i) => {
+      report += `${i + 1}. ${domain}\n`;
+    });
+
+    report += `\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    report += `📝 REPORT NOTES\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    report += `This report contains forensic evidence of all security threats\n`;
+    report += `detected by HelioRa during your browsing session.\n\n`;
+    report += `• Tunnel domains (trycloudflare.com, ngrok.io, etc.) indicate\n`;
+    report += `  potential surveillance attacks like CamPhish.\n\n`;
+    report += `• High-risk domains should be reported to your IT security team\n`;
+    report += `  or law enforcement if credential theft is suspected.\n\n`;
+    report += `• This report can be used as evidence for cybercrime investigation.\n\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    report += `Generated by HelioRa Security Platform v4.0.0\n`;
+    report += `Created by Anshul Saxena\n\n`;
+    report += `For support: anshulsaxena9c6stc@gmail.com\n`;
+    report += `GitHub: github.com/AnshulAlgoS/HelioRa\n\n`;
+    report += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`;
+    report += `END OF REPORT\n`;
+
+    return report;
   }
   
   // Privacy Lockdown button - Load initial state

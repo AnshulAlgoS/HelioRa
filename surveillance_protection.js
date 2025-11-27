@@ -11,8 +11,10 @@
   const url = window.location.href.toLowerCase();
   
   const TUNNEL_PATTERNS = [
-    'ngrok.io', 'ngrok-free.app', 'loca.lt', 'trycloudflare.com',
-    'serveo.net', 'localhost.run', 'tunnelto.dev', 'localtunnel.me'
+    'ngrok.io', 'ngrok-free.app', 'ngrok.app', 'loca.lt',
+    'trycloudflare.com', '.trycloudflare.com', // CloudFlare Tunnel - HIGH RISK
+    'serveo.net', 'localhost.run', 'tunnelto.dev', 'localtunnel.me',
+    'pagekite.me', 'tunnel.pyjam.as', 'cloudflare.app'
   ];
   
   const SUSPICIOUS_PATTERNS = [
