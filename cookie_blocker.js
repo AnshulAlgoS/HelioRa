@@ -5,19 +5,82 @@ console.log('[HelioRa Cookie Blocker] Loaded on:', window.location.hostname);
 // Auto-decline cookie banners
 class CookieBannerBlocker {
   constructor() {
+    this.settings = {
+      autoCookieDecline: true,
+      blockCookies: false
+    };
     this.init();
   }
 
-  init() {
-    // Wait for page to load
-    if (document.readyState === 'loading') {
-      document.addEventListener('DOMContentLoaded', () => this.blockCookieBanners());
-    } else {
-      this.blockCookieBanners();
+  async init() {
+    // Load settings first
+    try {
+      const result = await chrome.runtime.sendMessage({ action: 'getSettings' });
+      if (result?.settings) {
+        this.settings = {
+          autoCookieDecline: result.settings.autoCookieDecline !== false,
+          blockCookies: result.settings.blockCookies === true
+        };
+      }
+    } catch (err) {
+      console.log('[HelioRa Cookie] Using default settings');
     }
+    
+    // If either auto-decline or block cookies is enabled, start blocking
+    if (this.settings.autoCookieDecline || this.settings.blockCookies) {
+      // Inject CSS to hide cookie banners immediately
+      this.injectHidingCSS();
+      
+      // Wait for page to load
+      if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => this.blockCookieBanners());
+      } else {
+        this.blockCookieBanners();
+      }
 
-    // Watch for dynamically added cookie banners
-    this.observeDOMChanges();
+      // Watch for dynamically added cookie banners
+      this.observeDOMChanges();
+    }
+  }
+  
+  injectHidingCSS() {
+    // Inject CSS to instantly hide common cookie banners
+    const style = document.createElement('style');
+    style.id = 'heliora-cookie-blocker';
+    style.textContent = `
+      /* Hide common cookie banner classes */
+      #onetrust-banner-sdk,
+      #onetrust-consent-sdk,
+      .onetrust-pc-dark-filter,
+      #CybotCookiebotDialog,
+      .cky-consent-container,
+      #usercentrics-root,
+      .didomi-popup,
+      #truste-consent-track,
+      .qc-cmp2-container,
+      #qc-cmp2-ui,
+      .fc-consent-root,
+      .cc-window,
+      .cc-banner,
+      [class*="cookie-banner"],
+      [class*="cookie-consent"],
+      [class*="gdpr-banner"],
+      [id*="cookie-banner"],
+      [id*="cookie-consent"] {
+        display: none !important;
+        visibility: hidden !important;
+        opacity: 0 !important;
+        pointer-events: none !important;
+      }
+      
+      /* Re-enable scrolling if disabled by cookie banner */
+      body.modal-open {
+        overflow: auto !important;
+      }
+    `;
+    
+    (document.head || document.documentElement).appendChild(style);
+    console.log('[HelioRa Cookie] Injected hiding CSS');
   }
 
   blockCookieBanners() {
@@ -37,20 +100,29 @@ class CookieBannerBlocker {
       '[class*="notice"]',
       '[aria-label*="cookie" i]',
       '[aria-label*="consent" i]',
+      '[role="dialog"]',
+      '[role="banner"]',
       
       // Specific cookie banner libraries
       '#onetrust-banner-sdk',
+      '#onetrust-consent-sdk',
+      '.onetrust-pc-dark-filter',
       '#cookieConsent',
       '.cookie-banner',
       '.cookie-consent',
       '.gdpr-banner',
       '.cc-window',
+      '.cc-banner',
       '.cookie-notice',
       '#CybotCookiebotDialog',
       '.cky-consent-container',
       '#usercentrics-root',
       '.didomi-popup',
-      '#truste-consent-track'
+      '#truste-consent-track',
+      '.qc-cmp2-container',
+      '#qc-cmp2-ui',
+      '.fc-consent-root',
+      '#sp_message_container_'
     ];
 
     let bannersFound = 0;
@@ -61,24 +133,39 @@ class CookieBannerBlocker {
         elements.forEach(element => {
           // Check if it's actually a cookie banner (visible and has cookie-related text)
           const text = element.textContent.toLowerCase();
-          if (text.includes('cookie') || text.includes('consent') || text.includes('privacy') || text.includes('gdpr')) {
-            // Try to find and click decline/reject button
-            const declined = this.findAndClickDeclineButton(element);
-            
-            if (!declined) {
-              // If no decline button found, just hide the banner
+          const isCookieBanner = text.includes('cookie') || text.includes('consent') || 
+                                 text.includes('privacy') || text.includes('gdpr') ||
+                                 text.includes('accept') || text.includes('reject');
+          
+          if (isCookieBanner) {
+            // If "Block All Cookies" is enabled, just remove the banner immediately
+            if (this.settings.blockCookies) {
               element.style.display = 'none';
-              element.remove();
+              setTimeout(() => element.remove(), 100);
+              bannersFound++;
+              console.log('[HelioRa] Force removed cookie banner (Block All Cookies enabled)');
+            } else {
+              // Otherwise try to decline automatically
+              const declined = this.findAndClickDeclineButton(element);
+              
+              if (!declined) {
+                // If no decline button found, just hide the banner
+                element.style.display = 'none';
+                setTimeout(() => element.remove(), 100);
+              }
+              
+              bannersFound++;
+              console.log('[HelioRa] Blocked cookie banner:', selector);
             }
-            
-            bannersFound++;
-            console.log('[HelioRa] Blocked cookie banner:', selector);
           }
         });
       } catch (err) {
         // Ignore selector errors
       }
     });
+    
+    // Also remove cookie consent overlays/backdrops
+    this.removeOverlays();
 
     if (bannersFound > 0) {
       console.log(`[HelioRa] Blocked ${bannersFound} cookie banner(s)`);
@@ -89,6 +176,25 @@ class CookieBannerBlocker {
         count: bannersFound
       }).catch(() => {});
     }
+  }
+  
+  removeOverlays() {
+    // Remove dark overlays that cookie popups create
+    const overlays = document.querySelectorAll('[class*="overlay"], [class*="backdrop"], [class*="modal-backdrop"]');
+    overlays.forEach(overlay => {
+      const style = window.getComputedStyle(overlay);
+      const zIndex = parseInt(style.zIndex);
+      
+      // If it's a high z-index overlay (likely from cookie banner)
+      if (zIndex > 1000) {
+        overlay.style.display = 'none';
+        overlay.remove();
+      }
+    });
+    
+    // Re-enable scrolling if it was disabled by cookie banner
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
   }
 
   findAndClickDeclineButton(banner) {
@@ -156,7 +262,12 @@ class CookieBannerBlocker {
         mutation.addedNodes.forEach(node => {
           if (node.nodeType === 1) { // Element node
             const text = node.textContent?.toLowerCase() || '';
-            if (text.includes('cookie') || text.includes('consent') || text.includes('privacy')) {
+            const className = node.className?.toString().toLowerCase() || '';
+            const id = node.id?.toLowerCase() || '';
+            
+            if (text.includes('cookie') || text.includes('consent') || text.includes('privacy') ||
+                className.includes('cookie') || className.includes('consent') || 
+                id.includes('cookie') || id.includes('consent')) {
               shouldCheck = true;
             }
           }
@@ -164,7 +275,7 @@ class CookieBannerBlocker {
       });
 
       if (shouldCheck) {
-        setTimeout(() => this.blockCookieBanners(), 1000);
+        setTimeout(() => this.blockCookieBanners(), 500);
       }
     });
 
@@ -176,11 +287,11 @@ class CookieBannerBlocker {
 }
 
 // Initialize the cookie banner blocker
-setTimeout(() => {
-  new CookieBannerBlocker();
-}, 1000);
+const cookieBlocker = new CookieBannerBlocker();
 
 // Re-check periodically for lazy-loaded banners
 setInterval(() => {
-  new CookieBannerBlocker();
-}, 5000);
+  if (cookieBlocker.settings.autoCookieDecline || cookieBlocker.settings.blockCookies) {
+    cookieBlocker.blockCookieBanners();
+  }
+}, 3000);
