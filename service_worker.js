@@ -368,28 +368,45 @@ async function quickPhishingCheck(url) {
 }
 
 // HelioAI Analysis (powered by NVIDIA)
-async function getHelioAIAnalysis(domain, url, detectedThreats) {
+async function getHelioAIAnalysis(domain, url, detectedThreats, riskScore) {
   try {
     // If no threats, provide a simple safe message
-    if (detectedThreats.length === 0) {
-      return "This website looks secure! HelioAI found no suspicious patterns or security concerns.";
+    if (detectedThreats.length === 0 || riskScore < 20) {
+      return "This website appears secure. HelioAI found no significant security concerns or suspicious patterns.";
     }
     
-    // Create a smart, context-aware prompt
-    const prompt = `You are HelioAI, a security expert assistant. Analyze this website intelligently:
+    // Determine threat context
+    const threatContext = {
+      hasPhishing: detectedThreats.some(t => t.toLowerCase().includes('phish') || t.toLowerCase().includes('typosquat')),
+      hasMalware: detectedThreats.some(t => t.toLowerCase().includes('malware') || t.toLowerCase().includes('dangerous')),
+      hasInsecure: detectedThreats.some(t => t.toLowerCase().includes('http') || t.toLowerCase().includes('insecure')),
+      hasSuspiciousDomain: detectedThreats.some(t => t.toLowerCase().includes('domain') || t.toLowerCase().includes('tld')),
+      count: detectedThreats.length
+    };
+    
+    // Create a smart, context-aware prompt with better instructions
+    const prompt = `You are HelioAI, an advanced cybersecurity analyst. Analyze this website with precision and intelligence.
 
-Domain: ${domain}
-URL: ${url}
-Security concerns detected: ${detectedThreats.join(', ')}
+Website Information:
+- Domain: ${domain}
+- Full URL: ${url}
+- Risk Score: ${riskScore}/100
+- Security Concerns: ${detectedThreats.join('; ')}
 
-IMPORTANT: 
-- Don't just repeat what's in the domain name (e.g., if domain has "phish" in it, that doesn't mean it's phishing)
-- Look at the ACTUAL security patterns and behavior
-- Consider if this could be a legitimate security-related website (like security blogs, security tools, etc.)
-- Be smart about false positives
-- Only raise concerns if there are REAL security risks
+Analysis Guidelines:
+1. Consider context: Is this a security tool/blog that naturally has security terms in the URL?
+2. Distinguish between legitimate tools (downloaders, converters) and actual threats
+3. Don't flag security research sites, antivirus sites, or security news sites
+4. Look for REAL malicious intent patterns, not just keywords
+5. Consider if the domain extension and structure make sense for the service
 
-Provide a brief (1-2 sentences), user-friendly explanation of actual security risks. If it's likely a false positive (security blog, security tool, etc.), mention that it appears legitimate despite the security-related terms.`;
+Provide a brief, accurate analysis (2-3 sentences max) that:
+- Explains the ACTUAL risk to the user
+- Gives specific advice if dangerous
+- Acknowledges if it's likely a false positive
+- Uses clear, non-technical language
+
+Focus on what the user should KNOW and DO, not just repeating the detected patterns.`;
 
     const response = await fetch(NVIDIA_API_URL, {
       method: 'POST',
@@ -401,19 +418,36 @@ Provide a brief (1-2 sentences), user-friendly explanation of actual security ri
         model: 'meta/llama-3.1-8b-instruct',
         messages: [
           {
+            role: 'system',
+            content: 'You are HelioAI, a precise security analyst. Give accurate, context-aware assessments. Be smart about false positives. Keep responses under 200 characters.'
+          },
+          {
             role: 'user',
             content: prompt
           }
         ],
-        temperature: 0.2,
-        max_tokens: 150
+        temperature: 0.15, // Lower temperature for more consistent, factual responses
+        max_tokens: 120,
+        top_p: 0.9
       })
     });
 
     if (response.ok) {
       const data = await response.json();
-      const aiResponse = data.choices[0]?.message?.content;
+      let aiResponse = data.choices[0]?.message?.content;
+      
       if (aiResponse) {
+        // Clean up the response
+        aiResponse = aiResponse.trim();
+        
+        // Remove common AI prefixes
+        aiResponse = aiResponse.replace(/^(Analysis:|Assessment:|HelioAI says:|Based on the analysis,?|Upon review,?)/i, '').trim();
+        
+        // Limit length for UI
+        if (aiResponse.length > 300) {
+          aiResponse = aiResponse.substring(0, 297) + '...';
+        }
+        
         console.log('[HelioRa] AI Analysis received:', aiResponse);
         return aiResponse;
       }
@@ -424,9 +458,23 @@ Provide a brief (1-2 sentences), user-friendly explanation of actual security ri
     console.error('[HelioRa] NVIDIA API error:', error);
   }
   
-  // Fallback message if API fails
+  // Intelligent fallback message based on threat type
   if (detectedThreats.length > 0) {
-    return `HelioAI detected: ${detectedThreats[0]}. Exercise caution while browsing this site.`;
+    const firstThreat = detectedThreats[0].toLowerCase();
+    
+    if (firstThreat.includes('typosquat')) {
+      return "This domain resembles a popular brand but isn't the official site. Verify the URL carefully before entering sensitive information.";
+    } else if (firstThreat.includes('malware') || firstThreat.includes('dangerous')) {
+      return "This site shows patterns commonly associated with malware distribution. Avoid downloading files or clicking suspicious links.";
+    } else if (firstThreat.includes('phishing')) {
+      return "Multiple phishing indicators detected. Be cautious about entering passwords or personal information on this site.";
+    } else if (firstThreat.includes('insecure') || firstThreat.includes('http')) {
+      return "This site uses an unencrypted connection (HTTP). Your data could be intercepted. Avoid entering sensitive information.";
+    } else if (firstThreat.includes('suspicious')) {
+      return "Some unusual patterns detected. Exercise caution and verify the site's legitimacy before interacting with it.";
+    }
+    
+    return `Security concern detected: ${detectedThreats[0]}. Please review the threat details and proceed with caution.`;
   }
   
   return "HelioAI is analyzing this website for security concerns...";
@@ -600,7 +648,7 @@ async function analyzePage(url, tabId) {
     }
     
     // Get AI analysis for ALL sites
-    let aiAnalysis = await getHelioAIAnalysis(domain, url, detectionReasons);
+    let aiAnalysis = await getHelioAIAnalysis(domain, url, detectionReasons, riskScore);
     
     // Create domain data
     const domainData = {
