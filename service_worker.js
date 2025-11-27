@@ -23,12 +23,17 @@ let firewallRules = {};
 // Domain data cache
 let domainDataCache = new Map();
 
+// Fraud memory - domains where user almost got scammed
+let fraudMemory = [];
+
 // Settings
 let settings = {
   threatDetection: true,
   behaviorDetection: true,
   networkFirewall: true,
-  autoBlock: true
+  autoBlock: true,
+  blockCookies: false, // Cookie blocking
+  blockThirdPartyCookies: true // Block third-party cookies
 };
 
 // Dynamic rule ID counter
@@ -37,9 +42,34 @@ let dynamicRuleIdCounter = 10000;
 // Known threat patterns
 const THREAT_PATTERNS = {
   malware: ['malware', 'virus', 'trojan', 'hack', 'crack', 'keygen', 'warez', 'infected'],
-  phishing: ['verify-account', 'secure-login', 'update-payment', 'suspended-account', 'unusual-activity', 'confirm-identity'],
+  phishing: ['verify-account', 'secure-login', 'update-payment', 'suspended-account', 'unusual-activity', 'confirm-identity', 'verify-info', 'account-locked', 'security-alert', 'billing-problem', 'payment-failed'],
   suspicious: ['free-download', 'click-here', 'winner', 'prize', 'urgent', 'limited-time', 'act-now'],
   dangerous: ['phishing', 'scam', 'fraud', 'fake', 'counterfeit', 'stolen']
+};
+
+// Known phishing domains and patterns
+const PHISHING_INDICATORS = {
+  // Common phishing keywords in URLs
+  keywords: [
+    'login', 'signin', 'account', 'verify', 'update', 'secure', 'suspended',
+    'confirm', 'banking', 'paypal', 'amazon', 'apple', 'microsoft', 'netflix',
+    'wallet', 'crypto', 'bitcoin'
+  ],
+  // Suspicious URL patterns
+  patterns: [
+    /\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/, // IP addresses
+    /-login\./i,
+    /-signin\./i,
+    /account-/i,
+    /verify-/i,
+    /secure-/i,
+    /update-/i,
+    /auth-/i,
+    /www\d+\./i,
+    /\w{20,}\./, // Very long subdomain
+  ],
+  // Dangerous TLDs commonly used for phishing
+  dangerousTlds: ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.pw', '.cc', '.info', '.online', '.site', '.website', '.space', '.club']
 };
 
 // Popular domains for typosquatting detection
@@ -102,12 +132,13 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // Load data on startup
-chrome.storage.local.get(['stats', 'blockedDomains', 'firewallRules', 'settings', 'dynamicRuleIdCounter']).then(async result => {
+chrome.storage.local.get(['stats', 'blockedDomains', 'firewallRules', 'settings', 'dynamicRuleIdCounter', 'fraudMemory']).then(async result => {
   if (result.stats) stats = result.stats;
   if (result.blockedDomains) blockedDomains = result.blockedDomains;
   if (result.firewallRules) firewallRules = result.firewallRules;
   if (result.settings) settings = result.settings;
   if (result.dynamicRuleIdCounter) dynamicRuleIdCounter = result.dynamicRuleIdCounter;
+  if (result.fraudMemory) fraudMemory = result.fraudMemory;
   
   console.log('[HelioRa] Loaded data:', { 
     stats, 
@@ -166,6 +197,40 @@ if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
   });
 }
 
+// Analyze page before navigation (phishing protection)
+chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
+  if (details.frameId !== 0) return; // Only check main frame
+  
+  const url = details.url;
+  if (!url || url.startsWith('chrome://') || url.startsWith('chrome-extension://')) {
+    return;
+  }
+  
+  // Quick phishing check
+  const phishingCheck = await quickPhishingCheck(url);
+  if (phishingCheck.isPhishing && phishingCheck.confidence >= 80) {
+    // Block the navigation
+    chrome.tabs.update(details.tabId, {
+      url: chrome.runtime.getURL('warning.html') + '?url=' + encodeURIComponent(url) + '&reason=' + encodeURIComponent(phishingCheck.reason)
+    });
+    
+    // Show notification
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: '🛡️ Phishing Attack Blocked',
+      message: `HelioRa blocked a phishing attempt:\n${new URL(url).hostname}\n\nReason: ${phishingCheck.reason}`,
+      priority: 2,
+      requireInteraction: true
+    });
+    
+    stats.threatsBlocked++;
+    chrome.storage.local.set({ stats });
+    
+    console.log('[HelioRa] Blocked phishing site:', url, phishingCheck);
+  }
+});
+
 // Analyze page when tab updates
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
@@ -181,15 +246,131 @@ chrome.tabs.onActivated.addListener(async (activeInfo) => {
   }
 });
 
-// NVIDIA AI Analysis
-async function getNVIDIAAnalysis(domain, url, detectedThreats) {
+// Quick phishing detection (fast, before page loads)
+async function quickPhishingCheck(url) {
   try {
-    const prompt = `Analyze this website for security threats:
+    const urlObj = new URL(url);
+    const domain = urlObj.hostname.replace('www.', '');
+    const fullUrl = url.toLowerCase();
+    
+    let phishingScore = 0;
+    let reasons = [];
+    
+    // 1. Check if already blacklisted
+    if (blockedDomains.includes(domain)) {
+      return {
+        isPhishing: true,
+        confidence: 100,
+        reason: 'Domain is in your blacklist'
+      };
+    }
+    
+    // 2. Check for IP address instead of domain
+    if (/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(domain)) {
+      phishingScore += 50;
+      reasons.push('Using IP address instead of domain name');
+    }
+    
+    // 3. Check for dangerous TLDs
+    const hasDangerousTld = PHISHING_INDICATORS.dangerousTlds.some(tld => domain.endsWith(tld));
+    if (hasDangerousTld) {
+      phishingScore += 40;
+      reasons.push('Suspicious domain extension');
+    }
+    
+    // 4. Check for typosquatting of popular brands
+    for (const [brand, legitimate] of Object.entries(POPULAR_DOMAINS)) {
+      if (domain.includes(brand) && domain !== legitimate && !domain.endsWith(legitimate)) {
+        phishingScore += 60;
+        reasons.push(`Potential typosquatting of ${legitimate}`);
+        break;
+      }
+    }
+    
+    // 5. Check for phishing keywords in URL
+    const phishingKeywordCount = PHISHING_INDICATORS.keywords.filter(kw => 
+      fullUrl.includes(kw)
+    ).length;
+    
+    if (phishingKeywordCount >= 2) {
+      phishingScore += 30;
+      reasons.push('Multiple phishing keywords detected');
+    }
+    
+    // 6. Check for suspicious patterns
+    const suspiciousPatternMatches = PHISHING_INDICATORS.patterns.filter(pattern => 
+      pattern.test(fullUrl)
+    ).length;
+    
+    if (suspiciousPatternMatches >= 2) {
+      phishingScore += 25;
+      reasons.push('Suspicious URL patterns detected');
+    }
+    
+    // 7. Check for excessive subdomains (more than 3)
+    const subdomains = domain.split('.');
+    if (subdomains.length > 4) {
+      phishingScore += 20;
+      reasons.push('Excessive subdomains');
+    }
+    
+    // 8. Check for no HTTPS on login/account pages
+    if (url.startsWith('http://') && (fullUrl.includes('login') || fullUrl.includes('account') || fullUrl.includes('signin'))) {
+      phishingScore += 40;
+      reasons.push('Insecure connection on sensitive page');
+    }
+    
+    // 9. Check for very long domain names (>30 chars = suspicious)
+    if (domain.length > 30) {
+      phishingScore += 15;
+      reasons.push('Unusually long domain name');
+    }
+    
+    // 10. Check for numbers in middle of domain (suspicious)
+    if (/[a-z]\d{2,}[a-z]/.test(domain)) {
+      phishingScore += 15;
+      reasons.push('Numbers embedded in domain name');
+    }
+    
+    const confidence = Math.min(100, phishingScore);
+    const isPhishing = confidence >= 70; // Block if 70%+ confidence
+    
+    return {
+      isPhishing,
+      confidence,
+      reason: reasons.join(', ') || 'No threats detected',
+      score: phishingScore
+    };
+    
+  } catch (error) {
+    console.error('[HelioRa] Phishing check error:', error);
+    return { isPhishing: false, confidence: 0, reason: 'Error during check' };
+  }
+}
+
+// HelioAI Analysis (powered by NVIDIA)
+async function getHelioAIAnalysis(domain, url, detectedThreats) {
+  try {
+    // If no threats, provide a simple safe message
+    if (detectedThreats.length === 0) {
+      return "This website looks secure! HelioAI found no suspicious patterns or security concerns.";
+    }
+    
+    // Create a smart, context-aware prompt
+    const prompt = `You are HelioAI, a security expert assistant. Analyze this website intelligently:
+
 Domain: ${domain}
 URL: ${url}
-Detected patterns: ${detectedThreats.join(', ')}
+Security concerns detected: ${detectedThreats.join(', ')}
 
-Provide a brief security analysis in 1-2 sentences. Focus on: phishing risk, malware indicators, typosquatting, suspicious patterns.`;
+IMPORTANT: 
+- Don't just repeat what's in the domain name (e.g., if domain has "phish" in it, that doesn't mean it's phishing)
+- Look at the ACTUAL security patterns and behavior
+- Consider if this could be a legitimate security-related website (like security blogs, security tools, etc.)
+- Be smart about false positives
+- Only raise concerns if there are REAL security risks
+
+Provide a brief (1-2 sentences), user-friendly explanation of actual security risks. If it's likely a false positive (security blog, security tool, etc.), mention that it appears legitimate despite the security-related terms.`;
 
     const response = await fetch(NVIDIA_API_URL, {
       method: 'POST',
@@ -212,12 +393,24 @@ Provide a brief security analysis in 1-2 sentences. Focus on: phishing risk, mal
 
     if (response.ok) {
       const data = await response.json();
-      return data.choices[0]?.message?.content || 'Analysis unavailable';
+      const aiResponse = data.choices[0]?.message?.content;
+      if (aiResponse) {
+        console.log('[HelioRa] AI Analysis received:', aiResponse);
+        return aiResponse;
+      }
+    } else {
+      console.error('[HelioRa] API response not OK:', response.status, response.statusText);
     }
   } catch (error) {
     console.error('[HelioRa] NVIDIA API error:', error);
   }
-  return null;
+  
+  // Fallback message if API fails
+  if (detectedThreats.length > 0) {
+    return `HelioAI detected: ${detectedThreats[0]}. Exercise caution while browsing this site.`;
+  }
+  
+  return "HelioAI is analyzing this website for security concerns...";
 }
 
 // Main page analysis function
@@ -245,41 +438,67 @@ async function analyzePage(url, tabId) {
       threats.push('Domain blocked by user');
       detectionReasons.push('User blacklisted');
     } else {
-      // 2. Check for malware patterns (HIGH RISK +60)
-      THREAT_PATTERNS.malware.forEach(pattern => {
-        if (domain.includes(pattern) || fullUrl.includes(pattern)) {
-          riskScore += 60;
-          threats.push(`Malware keyword: ${pattern}`);
-          detectionReasons.push(`Malware pattern: ${pattern}`);
-        }
-      });
+      // Whitelist legitimate security/tech domains to avoid false positives
+      const legitimateDomains = [
+        'github.com', 'stackoverflow.com', 'security.org', 'owasp.org',
+        'virustotal.com', 'malwarebytes.com', 'kaspersky.com', 'norton.com',
+        'phish.report', 'haveibeenpwned.com', 'bleepingcomputer.com',
+        'krebsonsecurity.com', 'threatpost.com', 'securityweek.com',
+        'reddit.com', 'wikipedia.org', 'cloudflare.com'
+      ];
       
-      // 3. Check for dangerous patterns (HIGH RISK +70)
-      THREAT_PATTERNS.dangerous.forEach(pattern => {
-        if (domain.includes(pattern) || fullUrl.includes(pattern)) {
-          riskScore += 70;
-          threats.push(`Dangerous keyword: ${pattern}`);
-          detectionReasons.push(`Dangerous pattern: ${pattern}`);
-        }
-      });
+      const isLegitimate = legitimateDomains.some(legit => 
+        domain.endsWith(legit) || domain === legit
+      );
       
-      // 4. Check for phishing patterns (MEDIUM-HIGH RISK +40)
-      THREAT_PATTERNS.phishing.forEach(pattern => {
-        if (fullUrl.includes(pattern)) {
+      if (!isLegitimate) {
+        // 2. Check for malware patterns (HIGH RISK +60) - only in main domain
+        THREAT_PATTERNS.malware.forEach(pattern => {
+          if (domain.includes(pattern)) {
+            riskScore += 60;
+            threats.push(`Malware keyword in domain: ${pattern}`);
+            detectionReasons.push(`Malware pattern in domain: ${pattern}`);
+          }
+        });
+        
+        // 3. Check for dangerous patterns (HIGH RISK +70) - only in domain, not URL path
+        THREAT_PATTERNS.dangerous.forEach(pattern => {
+          if (domain.includes(pattern) && !urlObj.pathname.toLowerCase().includes(pattern)) {
+            riskScore += 70;
+            threats.push(`Dangerous keyword in domain: ${pattern}`);
+            detectionReasons.push(`Dangerous pattern in domain: ${pattern}`);
+          }
+        });
+        
+        // 4. Check for phishing patterns (MEDIUM-HIGH RISK +40) - only in suspicious contexts
+        let phishingPatternCount = 0;
+        THREAT_PATTERNS.phishing.forEach(pattern => {
+          if (fullUrl.includes(pattern)) {
+            phishingPatternCount++;
+          }
+        });
+        
+        // Only flag if multiple phishing patterns found
+        if (phishingPatternCount >= 2) {
           riskScore += 40;
-          threats.push(`Phishing pattern: ${pattern}`);
-          detectionReasons.push(`Phishing pattern: ${pattern}`);
+          threats.push(`Multiple phishing patterns detected`);
+          detectionReasons.push(`${phishingPatternCount} phishing patterns found`);
         }
-      });
-      
-      // 5. Check for suspicious patterns (LOW-MEDIUM RISK +20)
-      THREAT_PATTERNS.suspicious.forEach(pattern => {
-        if (fullUrl.includes(pattern)) {
+        
+        // 5. Check for suspicious patterns (LOW-MEDIUM RISK +20) - only in URL parameters
+        let suspiciousPatternCount = 0;
+        THREAT_PATTERNS.suspicious.forEach(pattern => {
+          if (urlObj.search.includes(pattern) || urlObj.pathname.includes(pattern)) {
+            suspiciousPatternCount++;
+          }
+        });
+        
+        if (suspiciousPatternCount >= 2) {
           riskScore += 20;
-          threats.push(`Suspicious pattern: ${pattern}`);
-          detectionReasons.push(`Suspicious pattern: ${pattern}`);
+          threats.push(`Suspicious patterns in URL`);
+          detectionReasons.push(`${suspiciousPatternCount} suspicious patterns`);
         }
-      });
+      }
       
       // 6. Typosquatting detection (HIGH RISK +50)
       for (const [brand, legitimate] of Object.entries(POPULAR_DOMAINS)) {
@@ -336,11 +555,8 @@ async function analyzePage(url, tabId) {
       status = 'safe';
     }
     
-    // Get AI analysis for suspicious/dangerous sites
-    let aiAnalysis = null;
-    if (riskScore >= 30 && detectionReasons.length > 0) {
-      aiAnalysis = await getNVIDIAAnalysis(domain, url, detectionReasons);
-    }
+    // Get AI analysis for ALL sites
+    let aiAnalysis = await getHelioAIAnalysis(domain, url, detectionReasons);
     
     // Create domain data
     const domainData = {
@@ -738,7 +954,152 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ settings });
     return true;
   }
+  
+  if (request.action === 'cookieBannerBlocked') {
+    // Track cookie banners blocked
+    console.log('[HelioRa] Cookie banner blocked on:', sender.url);
+    return true;
+  }
+  
+  if (request.action === 'getCookiesBlocked') {
+    sendResponse({ count: getCookiesBlockedCount() });
+    return true;
+  }
+  
+  if (request.action === 'fraudDetected') {
+    const { domain, fraudScore, threats, isPaymentPage } = request;
+    
+    console.log('[HelioRa] FRAUD DETECTED:', {
+      domain,
+      fraudScore,
+      threats: threats.length,
+      isPaymentPage
+    });
+    
+    // Update domain data with fraud info
+    const domainData = domainDataCache.get(domain);
+    if (domainData) {
+      domainData.fraudScore = fraudScore;
+      domainData.fraudThreats = threats;
+      domainData.riskScore = Math.max(domainData.riskScore || 0, fraudScore);
+      
+      if (fraudScore >= 70) {
+        domainData.status = 'dangerous';
+      } else if (fraudScore >= 40) {
+        domainData.status = 'suspicious';
+      }
+      
+      // Add fraud events
+      threats.forEach(threat => {
+        domainData.events.push({
+          time: new Date().toLocaleTimeString(),
+          type: 'fraud-detected',
+          description: threat,
+          severity: 'critical'
+        });
+      });
+      
+      domainDataCache.set(domain, domainData);
+    }
+    
+    // Show notification for critical fraud
+    if (fraudScore >= 70) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: '🚨 CRITICAL FRAUD ALERT',
+        message: `HelioRa detected ${threats.length} fraud indicators on ${domain}\n\n${threats[0] || 'High risk site'}`,
+        priority: 2,
+        requireInteraction: true
+      });
+      
+      // Add to fraud memory
+      if (!fraudMemory.find(f => f.domain === domain)) {
+        fraudMemory.push({
+          domain,
+          fraudScore,
+          threats,
+          timestamp: Date.now(),
+          firstSeen: new Date().toISOString()
+        });
+        
+        // Keep only last 100 fraud attempts
+        if (fraudMemory.length > 100) {
+          fraudMemory.shift();
+        }
+        
+        chrome.storage.local.set({ fraudMemory });
+      }
+      
+      stats.threatsBlocked++;
+      chrome.storage.local.set({ stats });
+    }
+    
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  if (request.action === 'getFraudMemory') {
+    sendResponse({ fraudMemory });
+    return true;
+  }
+  
+  if (request.action === 'checkFraudHistory') {
+    const { domain } = request;
+    const history = fraudMemory.filter(f => f.domain === domain);
+    sendResponse({ history, hasHistory: history.length > 0 });
+    return true;
+  }
 });
+
+// Cookie Management Functions
+let cookiesBlocked = 0;
+
+// Block cookies based on settings
+chrome.cookies.onChanged.addListener(async (changeInfo) => {
+  if (!changeInfo.removed && changeInfo.cookie) {
+    const cookie = changeInfo.cookie;
+    
+    // Block all cookies if enabled
+    if (settings.blockCookies) {
+      try {
+        await chrome.cookies.remove({
+          url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+          name: cookie.name,
+          storeId: cookie.storeId
+        });
+        cookiesBlocked++;
+        console.log('[HelioRa] Blocked cookie:', cookie.name, 'from', cookie.domain);
+      } catch (error) {
+        console.error('[HelioRa] Error blocking cookie:', error);
+      }
+    }
+    // Block only third-party cookies if enabled
+    else if (settings.blockThirdPartyCookies && !cookie.domain.startsWith('.') && cookie.domain !== cookie.hostOnly) {
+      try {
+        await chrome.cookies.remove({
+          url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+          name: cookie.name,
+          storeId: cookie.storeId
+        });
+        cookiesBlocked++;
+        console.log('[HelioRa] Blocked third-party cookie:', cookie.name, 'from', cookie.domain);
+      } catch (error) {
+        console.error('[HelioRa] Error blocking third-party cookie:', error);
+      }
+    }
+  }
+});
+
+// Get cookies blocked count
+function getCookiesBlockedCount() {
+  return cookiesBlocked;
+}
+
+// Reset cookies blocked count
+function resetCookiesBlocked() {
+  cookiesBlocked = 0;
+}
 
 // Save stats and counter periodically
 setInterval(() => {

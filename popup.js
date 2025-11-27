@@ -22,6 +22,7 @@ const elements = {
 };
 
 let currentDomain = null;
+let currentAiAnalysis = null; // Store AI analysis to prevent reloading
 
 // Load data immediately when popup opens
 document.addEventListener('DOMContentLoaded', async () => {
@@ -29,8 +30,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadAllData();
   setupEventListeners();
   
-  // Auto-refresh every 3 seconds
-  setInterval(loadAllData, 3000);
+  // Auto-refresh stats only (not AI analysis) every 5 seconds
+  setInterval(async () => {
+    try {
+      const [statsResponse] = await Promise.all([
+        chrome.runtime.sendMessage({ action: 'getStats' })
+      ]);
+      
+      if (statsResponse?.stats) {
+        updateStats(statsResponse.stats);
+      }
+    } catch (error) {
+      console.error('[HelioRa Popup] Error refreshing stats:', error);
+    }
+  }, 5000);
 });
 
 async function loadAllData() {
@@ -72,14 +85,18 @@ function updateDomainInfo(data) {
   
   console.log('[HelioRa Popup] Updating domain info:', data);
   
+  // Check fraud history
+  checkFraudHistory(data.domain);
+  
   // Update domain name
   if (elements.statusDomain) {
     elements.statusDomain.textContent = data.domain || 'Unknown';
   }
   
-  // Update risk score
+  // Update risk score (use fraud score if higher)
   if (elements.riskScore) {
-    elements.riskScore.textContent = data.riskScore || 0;
+    const displayScore = Math.max(data.riskScore || 0, data.fraudScore || 0);
+    elements.riskScore.textContent = displayScore;
   }
   
   // Update status
@@ -126,12 +143,47 @@ function updateDomainInfo(data) {
     elements.securityStatus.className = `security-status ${config.class}`;
   }
   
-  // Update AI Analysis
-  if (data.aiAnalysis && elements.aiAnalysis && elements.aiAnalysisText) {
-    elements.aiAnalysisText.textContent = data.aiAnalysis;
+  // Update AI Analysis (only if changed to prevent flickering)
+  if (data.aiAnalysis && data.aiAnalysis !== currentAiAnalysis && elements.aiAnalysis && elements.aiAnalysisText) {
+    currentAiAnalysis = data.aiAnalysis;
+    
+    // Clean up the AI response text
+    let analysisText = data.aiAnalysis.trim();
+    
+    // Remove any markdown or formatting
+    analysisText = analysisText.replace(/\*\*/g, '');
+    analysisText = analysisText.replace(/\*/g, '');
+    analysisText = analysisText.replace(/#{1,6}\s/g, '');
+    
+    // Make it more user-friendly
+    if (analysisText.length > 200) {
+      analysisText = analysisText.substring(0, 200) + '...';
+    }
+    
+    // Show analysis with animation
     elements.aiAnalysis.style.display = 'block';
-  } else if (elements.aiAnalysis) {
+    elements.aiAnalysis.classList.add('active');
+    
+    // Show thinking animation first
+    const thinkingEl = document.getElementById('aiThinking');
+    if (thinkingEl) {
+      thinkingEl.style.display = 'flex';
+      elements.aiAnalysisText.style.display = 'none';
+      
+      // After 1 second, show the actual response
+      setTimeout(() => {
+        thinkingEl.style.display = 'none';
+        elements.aiAnalysisText.style.display = 'block';
+        elements.aiAnalysisText.textContent = analysisText;
+      }, 1000);
+    } else {
+      elements.aiAnalysisText.textContent = analysisText;
+      elements.aiAnalysisText.style.display = 'block';
+    }
+  } else if (!data.aiAnalysis && elements.aiAnalysis) {
     elements.aiAnalysis.style.display = 'none';
+    elements.aiAnalysis.classList.remove('active');
+    currentAiAnalysis = null;
   }
   
   // Update timeline
@@ -175,7 +227,10 @@ function updateSettingsUI(settings) {
     threatDetectionToggle: settings.threatDetection,
     behaviorDetectionToggle: settings.behaviorDetection,
     firewallToggle: settings.networkFirewall,
-    autoBlockToggle: settings.autoBlock
+    autoBlockToggle: settings.autoBlock,
+    autoCookieDeclineToggle: settings.autoCookieDecline !== false,
+    blockCookiesToggle: settings.blockCookies,
+    blockThirdPartyCookiesToggle: settings.blockThirdPartyCookies !== false
   };
   
   for (const [id, value] of Object.entries(toggles)) {
@@ -330,7 +385,16 @@ function setupEventListeners() {
   }
   
   // Settings toggles
-  const toggles = ['threatDetectionToggle', 'behaviorDetectionToggle', 'firewallToggle', 'autoBlockToggle'];
+  const toggles = [
+    'threatDetectionToggle', 
+    'behaviorDetectionToggle', 
+    'firewallToggle', 
+    'autoBlockToggle',
+    'autoCookieDeclineToggle',
+    'blockCookiesToggle',
+    'blockThirdPartyCookiesToggle'
+  ];
+  
   toggles.forEach(toggleId => {
     const toggle = document.getElementById(toggleId);
     if (toggle) {
@@ -345,6 +409,11 @@ function setupEventListeners() {
         });
         
         console.log('[HelioRa Popup] Setting updated:', settingName, e.target.checked);
+        
+        // Show notification for cookie settings
+        if (settingName.includes('cookie') || settingName.includes('Cookie')) {
+          showNotification(`Cookie settings updated: ${settingName}`, 'success');
+        }
       });
     }
   });
@@ -426,6 +495,25 @@ function showNotification(message, type = 'info') {
     notification.style.animation = 'slideOut 0.3s ease';
     setTimeout(() => notification.remove(), 300);
   }, 3000);
+}
+
+async function checkFraudHistory(domain) {
+  try {
+    const response = await chrome.runtime.sendMessage({
+      action: 'checkFraudHistory',
+      domain: domain
+    });
+    
+    if (response?.hasHistory) {
+      const history = response.history[0];
+      showNotification(
+        `⚠️ WARNING: You previously encountered fraud on this domain! (${history.threats.length} threats detected on ${new Date(history.timestamp).toLocaleDateString()})`,
+        'error'
+      );
+    }
+  } catch (error) {
+    console.error('[HelioRa Popup] Error checking fraud history:', error);
+  }
 }
 
 console.log('[HelioRa Popup] Ready!');

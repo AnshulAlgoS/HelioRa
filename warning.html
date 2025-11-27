@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⚠️ Security Warning - HelioRa</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a1a 0%, #0d0d0d 100%);
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .warning-container {
+            max-width: 700px;
+            width: 100%;
+            background: #1f1f1f;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            border: 2px solid #F44336;
+        }
+
+        .warning-header {
+            background: linear-gradient(135deg, #F44336 0%, #D32F2F 100%);
+            padding: 40px 30px;
+            text-align: center;
+        }
+
+        .warning-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.1); opacity: 0.8; }
+        }
+
+        .warning-title {
+            font-size: 32px;
+            font-weight: 800;
+            margin-bottom: 10px;
+            color: #ffffff;
+        }
+
+        .warning-subtitle {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 500;
+        }
+
+        .warning-body {
+            padding: 40px 30px;
+        }
+
+        .threat-info {
+            background: rgba(244, 67, 54, 0.1);
+            border-left: 4px solid #F44336;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 30px;
+        }
+
+        .threat-label {
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #F44336;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .threat-url {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            color: #ffffff;
+            word-break: break-all;
+            margin-bottom: 15px;
+            font-weight: 600;
+        }
+
+        .threat-reason {
+            font-size: 14px;
+            color: #cccccc;
+            line-height: 1.6;
+        }
+
+        .warning-details {
+            background: #2a2a2a;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .warning-details h3 {
+            font-size: 16px;
+            color: #FDB813;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .warning-details ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .warning-details li {
+            padding: 10px 0;
+            padding-left: 30px;
+            position: relative;
+            font-size: 14px;
+            color: #cccccc;
+            line-height: 1.5;
+        }
+
+        .warning-details li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #4CAF50;
+            font-weight: bold;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 16px 24px;
+            border: none;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #FDB813 0%, #E6A500 100%);
+            color: #0A0A0A;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(253, 184, 19, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: #ffffff;
+            border: 2px solid #4a4a4a;
+        }
+
+        .btn-secondary:hover {
+            border-color: #FDB813;
+            color: #FDB813;
+        }
+
+        .btn-danger {
+            background: transparent;
+            color: #F44336;
+            border: 2px solid #F44336;
+            font-size: 13px;
+            padding: 12px 20px;
+        }
+
+        .btn-danger:hover {
+            background: #F44336;
+            color: #ffffff;
+        }
+
+        .footer-note {
+            text-align: center;
+            font-size: 12px;
+            color: #666666;
+            padding: 20px 30px 30px;
+            border-top: 1px solid #2a2a2a;
+        }
+
+        .heliora-logo {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #FDB813;
+            font-weight: 700;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+<div class="warning-container">
+    <div class="warning-header">
+        <div class="warning-icon">🛡️</div>
+        <h1 class="warning-title">Phishing Attack Blocked</h1>
+        <p class="warning-subtitle">HelioRa Security has prevented you from visiting a dangerous
+            website</p>
+    </div>
+
+    <div class="warning-body">
+        <div class="threat-info">
+            <div class="threat-label">Blocked URL</div>
+            <div class="threat-url" id="blockedUrl">Loading...</div>
+            <div class="threat-label">Threat Type</div>
+            <div class="threat-reason" id="threatReason">Loading...</div>
+        </div>
+
+        <div class="warning-details">
+            <h3>Why was this site blocked?</h3>
+            <ul>
+                <li>The website exhibits characteristics commonly associated with phishing attacks
+                </li>
+                <li>It may attempt to steal your passwords, credit card details, or personal
+                    information
+                </li>
+                <li>The domain appears to impersonate a legitimate service or company</li>
+                <li>Multiple security indicators suggest malicious intent</li>
+            </ul>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn btn-primary" id="goBackBtn">
+                ← Go Back to Safety
+            </button>
+            <button class="btn btn-secondary" id="closeTabBtn">
+                Close This Tab
+            </button>
+        </div>
+
+        <div style="text-align: center;">
+            <button class="btn btn-danger" id="continueAnywayBtn">
+                Ignore Warning (Not Recommended)
+            </button>
+        </div>
+    </div>
+
+    <div class="footer-note">
+        Protected by <span class="heliora-logo">⚡ HelioRa Security</span>
+        <br>
+        Enterprise-grade threat protection powered by HelioAI
+    </div>
+</div>
+
+<script>
+
+    // Get URL parameters
+    const params = new URLSearchParams(window.location.search);
+    const blockedUrl = params.get('url');
+    const reason = params.get('reason');
+
+    // Display blocked URL and reason
+    if (blockedUrl) {
+        document.getElementById('blockedUrl').textContent = decodeURIComponent(blockedUrl);
+    }
+
+    if (reason) {
+        document.getElementById('threatReason').textContent = decodeURIComponent(reason);
+    }
+
+    // Go back button
+    document.getElementById('goBackBtn').addEventListener('click', () => {
+        window.history.back();
+    });
+
+    // Close tab button
+    document.getElementById('closeTabBtn').addEventListener('click', () => {
+        window.close();
+    });
+
+    // Continue anyway button (not recommended)
+    document.getElementById('continueAnywayBtn').addEventListener('click', () => {
+        if (confirm('⚠️ WARNING: This site has been identified as dangerous.\n\nProceeding may result in:\n• Stolen passwords and credentials\n• Identity theft\n• Financial fraud\n• Malware infection\n\nAre you absolutely sure you want to continue?')) {
+            if (blockedUrl) {
+                window.location.href = decodeURIComponent(blockedUrl);
+            }
+        }
+
+});
+</script>
+</body>
+</html>

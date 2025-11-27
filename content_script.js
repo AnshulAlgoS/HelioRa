@@ -20,6 +20,9 @@ class HelioRaContentScript {
 
     // Inject PDF preview handler
     this.injectPDFHandler();
+    
+    // Inject phishing link protection
+    this.injectPhishingProtection();
   }
 
   analyze() {
@@ -230,6 +233,119 @@ class HelioRaContentScript {
     observer.observe(document.body, {
       childList: true,
       subtree: true
+    });
+  }
+
+  injectPhishingProtection() {
+    // Monitor all link clicks for phishing
+    document.addEventListener('click', async (e) => {
+      const link = e.target.closest('a');
+      if (!link) return;
+
+      const href = link.href || '';
+      if (!href || href.startsWith('javascript:') || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) {
+        return;
+      }
+
+      // Check if link leads to external domain
+      try {
+        const currentDomain = window.location.hostname;
+        const linkDomain = new URL(href).hostname;
+
+        // If it's an external link, check for phishing
+        if (linkDomain !== currentDomain) {
+          // Quick phishing indicators check
+          const isSuspicious = this.checkSuspiciousLink(href);
+          
+          if (isSuspicious.suspicious) {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const proceed = confirm(
+              `⚠️ HELIORА SECURITY WARNING\n\n` +
+              `This link appears suspicious:\n${linkDomain}\n\n` +
+              `Reason: ${isSuspicious.reason}\n\n` +
+              `Are you sure you want to continue?`
+            );
+            
+            if (!proceed) {
+              console.log('[HelioRa Content] Blocked suspicious link:', href);
+              this.sendEvent('phishing-link-blocked', `Blocked suspicious link: ${linkDomain}`, 'critical');
+            } else {
+              window.location.href = href;
+            }
+          }
+        }
+      } catch (err) {
+        // Invalid URL, ignore
+      }
+    }, true);
+
+    // Highlight suspicious links on the page
+    this.highlightSuspiciousLinks();
+  }
+
+  checkSuspiciousLink(url) {
+    try {
+      const urlLower = url.toLowerCase();
+      const urlObj = new URL(url);
+      const domain = urlObj.hostname;
+
+      // Check for IP addresses
+      if (/\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}/.test(domain)) {
+        return { suspicious: true, reason: 'Link uses IP address instead of domain name' };
+      }
+
+      // Check for suspicious TLDs
+      const suspiciousTlds = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.pw'];
+      if (suspiciousTlds.some(tld => domain.endsWith(tld))) {
+        return { suspicious: true, reason: 'Suspicious domain extension commonly used in phishing' };
+      }
+
+      // Check for typosquatting
+      const popularBrands = ['google', 'facebook', 'paypal', 'amazon', 'apple', 'microsoft', 'netflix', 'instagram'];
+      for (const brand of popularBrands) {
+        if (domain.includes(brand) && !domain.endsWith(`${brand}.com`)) {
+          return { suspicious: true, reason: `Possible typosquatting of ${brand}.com` };
+        }
+      }
+
+      // Check for phishing keywords
+      const phishingKeywords = ['verify', 'account', 'suspend', 'secure', 'update', 'confirm', 'login'];
+      const keywordCount = phishingKeywords.filter(kw => urlLower.includes(kw)).length;
+      if (keywordCount >= 2) {
+        return { suspicious: true, reason: 'Multiple phishing keywords detected in URL' };
+      }
+
+      return { suspicious: false, reason: '' };
+    } catch (err) {
+      return { suspicious: false, reason: '' };
+    }
+  }
+
+  highlightSuspiciousLinks() {
+    const links = document.querySelectorAll('a[href]');
+    links.forEach(link => {
+      const href = link.href;
+      if (!href || href.startsWith('javascript:') || href.startsWith('#')) return;
+
+      try {
+        const currentDomain = window.location.hostname;
+        const linkDomain = new URL(href).hostname;
+
+        if (linkDomain !== currentDomain) {
+          const check = this.checkSuspiciousLink(href);
+          if (check.suspicious) {
+            // Add visual warning
+            link.style.border = '2px solid #F44336';
+            link.style.backgroundColor = 'rgba(244, 67, 54, 0.1)';
+            link.style.borderRadius = '3px';
+            link.title = `⚠️ HelioRa Warning: ${check.reason}`;
+          }
+        }
+      } catch (err) {
+        // Invalid URL
+      }
     });
   }
 

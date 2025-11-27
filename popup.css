@@ -708,6 +708,131 @@ body {
     border-radius: 3px;
 }
 
+/* AI Analysis Section */
+.ai-analysis {
+    display: none;
+    margin-top: 12px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #2A2A2A 0%, #1F1F1F 100%);
+    border: 1px solid rgba(253, 184, 19, 0.3);
+    overflow: hidden;
+    animation: slideDown 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(253, 184, 19, 0.1);
+}
+
+@keyframes slideDown {
+    from {
+        opacity: 0;
+        transform: translateY(-10px) scale(0.98);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+.ai-analysis-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    background: linear-gradient(135deg, rgba(253, 184, 19, 0.15) 0%, rgba(253, 184, 19, 0.08) 100%);
+    border-bottom: 1px solid rgba(253, 184, 19, 0.2);
+}
+
+.ai-icon {
+    color: #FDB813;
+    flex-shrink: 0;
+    animation: rotate3d 3s ease-in-out infinite;
+}
+
+@keyframes rotate3d {
+    0%, 100% {
+        transform: rotateY(0deg);
+    }
+    50% {
+        transform: rotateY(180deg);
+    }
+}
+
+.ai-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: linear-gradient(135deg, #FDB813 0%, #FFD700 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.ai-analysis-content {
+    padding: 12px 14px;
+}
+
+.ai-thinking {
+    display: none;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0;
+}
+
+.thinking-dots {
+    display: flex;
+    gap: 4px;
+}
+
+.thinking-dots span {
+    width: 6px;
+    height: 6px;
+    background: #FDB813;
+    border-radius: 50%;
+    animation: thinking 1.4s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+}
+
+.thinking-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+}
+
+@keyframes thinking {
+    0%, 80%, 100% {
+        opacity: 0.3;
+        transform: scale(0.8);
+    }
+    40% {
+        opacity: 1;
+        transform: scale(1.2);
+    }
+}
+
+.thinking-text {
+    font-size: 11px;
+    color: var(--text-muted);
+    font-style: italic;
+}
+
+.ai-response {
+    font-size: 12px;
+    line-height: 1.7;
+    color: var(--text-primary);
+    font-weight: 400;
+    padding: 6px 0;
+}
+
+.ai-response::before {
+    content: '💡 ';
+    margin-right: 6px;
+}
+
+/* Make it glow when visible */
+.ai-analysis.active {
+    border-color: rgba(253, 184, 19, 0.5);
+    box-shadow: 0 4px 16px rgba(253, 184, 19, 0.2);
+}
+
 /* Notifications */
 @keyframes slideOut {
     from {
