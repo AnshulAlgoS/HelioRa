@@ -29,6 +29,7 @@
         "<all_urls>"
       ],
       "js": [
+        "surveillance_blocker.js",
         "cookie_blocker.js"
       ],
       "run_at": "document_start",

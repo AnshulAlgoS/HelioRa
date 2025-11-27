@@ -34,8 +34,13 @@ let settings = {
   autoBlock: true,
   autoCookieDecline: true, // Auto-decline cookie banners (enabled by default)
   blockCookies: false, // Block all cookies
-  blockThirdPartyCookies: true // Block third-party cookies only
+  blockThirdPartyCookies: true, // Block third-party cookies only
+  privacyLockdown: false // Global privacy lockdown - blocks all camera/mic/GPS
 };
+
+// Surveillance attempt logs (forensic evidence for law enforcement)
+let surveillanceLog = [];
+const MAX_SURVEILLANCE_LOGS = 1000;
 
 // Dynamic rule ID counter
 let dynamicRuleIdCounter = 10000;
@@ -989,6 +994,107 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   
   if (request.action === 'getCookiesBlocked') {
     sendResponse({ count: getCookiesBlockedCount() });
+    return true;
+  }
+  
+  if (request.action === 'logSurveillanceAttempt') {
+    const logEntry = request.data;
+    surveillanceLog.push(logEntry);
+    
+    // Keep only last 1000 entries
+    if (surveillanceLog.length > MAX_SURVEILLANCE_LOGS) {
+      surveillanceLog.shift();
+    }
+    
+    // Save to storage for forensic analysis
+    chrome.storage.local.set({ surveillanceLog });
+    
+    console.log('[HelioRa Surveillance] Logged attempt:', logEntry);
+    
+    // Show notification if blocked
+    if (logEntry.blocked) {
+      chrome.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon128.png',
+        title: 'Surveillance Attack Blocked',
+        message: `HelioRa blocked ${logEntry.type} access on ${logEntry.domain}`,
+        priority: 2
+      });
+      
+      stats.threatsBlocked++;
+    }
+    
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  if (request.action === 'highThreatSite') {
+    const { domain, url, threatScore } = request.data;
+    
+    console.error('[HelioRa Surveillance] HIGH THREAT SITE:', domain, threatScore);
+    
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'High Threat Site Detected',
+      message: `${domain} has threat score of ${threatScore}. Be careful!`,
+      priority: 2
+    });
+    
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  if (request.action === 'criticalSurveillanceThreat') {
+    const { domain, permissions } = request.data;
+    
+    console.error('[HelioRa Surveillance] CRITICAL THREAT - Multiple permissions requested:', permissions);
+    
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'CRITICAL: Surveillance Attack',
+      message: `${domain} is attempting CamPhish-style attack. Close the tab!`,
+      priority: 2,
+      requireInteraction: true
+    });
+    
+    stats.threatsBlocked++;
+    
+    sendResponse({ success: true });
+    return true;
+  }
+  
+  if (request.action === 'togglePrivacyLockdown') {
+    settings.privacyLockdown = !settings.privacyLockdown;
+    chrome.storage.local.set({ settings });
+    
+    // Notify all tabs
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'setPrivacyLockdown',
+          enabled: settings.privacyLockdown
+        }).catch(() => {});
+      });
+    });
+    
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: 'Privacy Lockdown ' + (settings.privacyLockdown ? 'ENABLED' : 'DISABLED'),
+      message: settings.privacyLockdown ? 
+        'All camera, microphone, and GPS access blocked across browser' :
+        'Privacy lockdown disabled',
+      priority: 2
+    });
+    
+    sendResponse({ success: true, enabled: settings.privacyLockdown });
+    return true;
+  }
+  
+  if (request.action === 'getSurveillanceLog') {
+    sendResponse({ log: surveillanceLog });
     return true;
   }
   
