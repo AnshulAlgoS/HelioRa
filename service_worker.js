@@ -1050,6 +1050,62 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     sendResponse({ history, hasHistory: history.length > 0 });
     return true;
   }
+  
+  if (request.action === 'analyzeBrandImpersonation') {
+    (async () => {
+      const { domain, url, brandClaims, pageTitle, hasLoginForm } = request;
+      
+      // Use AI to analyze if this is really brand impersonation
+      const brandName = brandClaims[0]?.brand;
+      const legitimateDomains = brandClaims[0]?.legitimateDomains.join(', ');
+      
+      const prompt = `Analyze if this is a phishing/impersonation attempt:
+
+Website: ${domain}
+Page Title: ${pageTitle}
+Claims to be: ${brandName}
+Legitimate domains: ${legitimateDomains}
+Has login form: ${hasLoginForm}
+
+Is this likely a fraud attempt impersonating ${brandName}? Answer with ONLY "YES" or "NO" and a brief reason (one sentence).`;
+
+      try {
+        const aiResponse = await fetch(NVIDIA_API_URL, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${NVIDIA_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            model: 'meta/llama-3.1-8b-instruct',
+            messages: [{ role: 'user', content: prompt }],
+            temperature: 0.1,
+            max_tokens: 100
+          })
+        });
+        
+        if (aiResponse.ok) {
+          const data = await aiResponse.json();
+          const analysis = data.choices[0]?.message?.content || '';
+          
+          if (analysis.startsWith('YES')) {
+            sendResponse({
+              isFraud: true,
+              message: `BRAND IMPERSONATION: This page imitates ${brandName.toUpperCase()} but is hosted on an untrusted domain`
+            });
+          } else {
+            sendResponse({ isFraud: false });
+          }
+        } else {
+          sendResponse({ isFraud: false });
+        }
+      } catch (error) {
+        console.error('[HelioRa] Brand impersonation analysis error:', error);
+        sendResponse({ isFraud: false });
+      }
+    })();
+    return true;
+  }
 });
 
 // Cookie Management Functions

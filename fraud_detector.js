@@ -79,97 +79,124 @@ class AdvancedFraudDetector {
     const title = document.title.toLowerCase();
     const fullText = bodyText + ' ' + title;
     
+    // Only flag if it's clearly a scam, not just mentioning the keywords
     let intent = 'unknown';
     let confidence = 0;
     
-    // Check for credential harvesting
-    let otpCount = 0;
-    let cardCount = 0;
-    let upiCount = 0;
-    let recoveryCount = 0;
-    let urgentCount = 0;
+    // Check for actual input fields asking for sensitive data
+    const inputs = document.querySelectorAll('input');
+    let hasCardInput = false;
+    let hasUPIInput = false;
+    let hasPinInput = false;
+    let hasOTPInput = false;
     
-    this.fraudPatterns.otp.forEach(pattern => {
-      if (fullText.includes(pattern)) otpCount++;
+    inputs.forEach(input => {
+      const name = (input.name || '').toLowerCase();
+      const id = (input.id || '').toLowerCase();
+      const placeholder = (input.placeholder || '').toLowerCase();
+      const label = input.labels?.[0]?.textContent.toLowerCase() || '';
+      
+      const fullInputText = name + ' ' + id + ' ' + placeholder + ' ' + label;
+      
+      if (fullInputText.includes('cvv') || fullInputText.includes('card number')) {
+        hasCardInput = true;
+      }
+      if (fullInputText.includes('upi pin') || fullInputText.includes('mpin')) {
+        hasUPIInput = true;
+      }
+      if (fullInputText.includes('atm pin') || fullInputText.includes('pin')) {
+        hasPinInput = true;
+      }
+      if (fullInputText.includes('otp') || fullInputText.includes('verification code')) {
+        hasOTPInput = true;
+      }
     });
     
-    this.fraudPatterns.card.forEach(pattern => {
-      if (fullText.includes(pattern)) cardCount++;
-    });
+    // Only flag if there are actual input fields AND suspicious context
+    const hasSuspiciousUrl = !window.location.protocol.startsWith('https') || 
+                             window.location.hostname.length > 30;
     
-    this.fraudPatterns.upi.forEach(pattern => {
-      if (fullText.includes(pattern)) upiCount++;
-    });
-    
-    this.fraudPatterns.recovery.forEach(pattern => {
-      if (fullText.includes(pattern)) recoveryCount++;
-    });
-    
-    this.fraudPatterns.urgent.forEach(pattern => {
-      if (fullText.includes(pattern)) urgentCount++;
-    });
-    
-    // Classify intent
-    if (cardCount >= 2) {
-      intent = 'Payment Credential Harvesting';
-      confidence = Math.min(95, cardCount * 30);
-      this.fraudScore += 70;
-      this.detectedThreats.push('🚨 CRITICAL: Page is requesting credit/debit card details');
-    }
-    
-    if (upiCount >= 1) {
-      intent = 'UPI PIN Harvesting';
-      confidence = Math.min(95, upiCount * 40);
+    if (hasUPIInput && hasSuspiciousUrl) {
       this.fraudScore += 80;
-      this.detectedThreats.push('🚨 CRITICAL: Page is asking for UPI PIN (NEVER share this!)');
+      this.detectedThreats.push('CRITICAL: Page has UPI PIN input field (NEVER enter your UPI PIN on untrusted sites)');
     }
     
-    if (recoveryCount >= 1) {
-      intent = 'Crypto Wallet Theft';
-      confidence = 95;
-      this.fraudScore += 90;
-      this.detectedThreats.push('🚨 CRITICAL: Page is requesting wallet recovery phrase');
+    if (hasCardInput && hasSuspiciousUrl) {
+      this.fraudScore += 70;
+      this.detectedThreats.push('WARNING: Page requesting card details on suspicious domain');
     }
     
-    if (otpCount >= 2 && urgentCount >= 1) {
-      intent = 'Account Takeover Scam';
-      confidence = Math.min(90, (otpCount + urgentCount) * 20);
-      this.fraudScore += 60;
-      this.detectedThreats.push('⚠️ WARNING: Urgent OTP request detected - possible account takeover');
-    }
-    
-    if (intent !== 'unknown') {
-      console.log(`[HelioRa Fraud] INTENT DETECTED: ${intent} (${confidence}% confidence)`);
-    }
-    
-    return { intent, confidence };
+    // Check for recovery phrases in input fields
+    const textareas = document.querySelectorAll('textarea');
+    textareas.forEach(textarea => {
+      const placeholder = (textarea.placeholder || '').toLowerCase();
+      if (placeholder.includes('recovery phrase') || placeholder.includes('seed phrase') || placeholder.includes('12 words')) {
+        this.fraudScore += 90;
+        this.detectedThreats.push('CRITICAL: Page requesting crypto wallet recovery phrase');
+      }
+    });
   }
 
-  detectFakeBrand() {
+  async detectFakeBrand() {
     const domain = this.domain;
+    const pageTitle = document.title.toLowerCase();
     const pageText = document.body.innerText.toLowerCase();
     
-    // Check each legitimate brand
+    // Only check if page explicitly claims to be a brand
+    const brandClaims = [];
+    
+    // Check title and prominent text for brand impersonation
     for (const [brand, data] of Object.entries(this.legitimateBrands)) {
-      // Check if page mentions the brand
-      if (pageText.includes(brand)) {
-        // Check if domain matches
+      // Check if page explicitly claims to be this brand (in title or main heading)
+      const mainHeadings = document.querySelectorAll('h1, h2, title');
+      let claimsToBeBrand = false;
+      
+      mainHeadings.forEach(heading => {
+        const text = heading.textContent.toLowerCase();
+        if (text === brand || text.includes(`${brand} login`) || text.includes(`${brand} sign in`)) {
+          claimsToBeBrand = true;
+        }
+      });
+      
+      if (claimsToBeBrand) {
+        // Now check if domain matches
         const isLegitimate = data.domains.some(legit => domain.endsWith(legit) || domain === legit);
         
         if (!isLegitimate) {
-          // Check for logo/visual impersonation
-          const hasLogo = this.findBrandLogo(brand);
-          const hasColorScheme = this.detectColorScheme(data.colors);
-          
-          if (hasLogo || hasColorScheme) {
-            this.fraudScore += 85;
-            this.detectedThreats.push(
-              `🎭 BRAND IMPERSONATION: This page imitates ${brand.toUpperCase()} but is hosted on "${domain}" (not official)`
-            );
-            console.log(`[HelioRa Fraud] Fake ${brand} detected!`);
-          }
+          brandClaims.push({
+            brand: brand,
+            domain: domain,
+            legitimateDomains: data.domains
+          });
         }
       }
+    }
+    
+    // Send to AI for analysis if we have suspicious brand claims
+    if (brandClaims.length > 0) {
+      await this.analyzeBrandImpersonation(brandClaims);
+    }
+  }
+  
+  async analyzeBrandImpersonation(brandClaims) {
+    // Send to extension for AI analysis
+    try {
+      const result = await chrome.runtime.sendMessage({
+        action: 'analyzeBrandImpersonation',
+        domain: this.domain,
+        url: window.location.href,
+        brandClaims: brandClaims,
+        pageTitle: document.title,
+        hasLoginForm: document.querySelectorAll('input[type="password"]').length > 0
+      });
+      
+      if (result?.isFraud) {
+        this.fraudScore += 85;
+        this.detectedThreats.push(result.message);
+        console.log('[HelioRa Fraud] AI confirmed brand impersonation');
+      }
+    } catch (err) {
+      console.log('[HelioRa Fraud] Could not analyze brand impersonation');
     }
   }
 
@@ -376,50 +403,47 @@ class AdvancedFraudDetector {
     
     if (isPayment) {
       this.isPaymentPage = true;
-      console.log('[HelioRa Fraud] Payment page detected - activating safe tunnel');
+      console.log('[HelioRa Fraud] Payment page detected - monitoring for hijacks');
       
-      // Monitor for suspicious behavior
-      this.activatePaymentSandbox();
+      // Only activate sandbox if we detect actual suspicious activity
+      // Don't show any message unless there's a real threat
     }
   }
 
   activatePaymentSandbox() {
-    // Prevent new iframes during payment
-    const originalCreateElement = document.createElement;
-    document.createElement = function(tagName) {
-      if (tagName.toLowerCase() === 'iframe') {
-        console.log('[HelioRa Fraud] BLOCKED: Iframe creation during payment');
-        throw new Error('HelioRa: Iframe blocked during payment for security');
-      }
-      return originalCreateElement.apply(document, arguments);
-    };
-    
-    // Warn user
-    this.detectedThreats.push('🔒 SAFE PAYMENT MODE: HelioRa has secured this payment page');
+    // Only called when actual threat detected during payment
+    console.log('[HelioRa Fraud] Payment sandbox activated due to suspicious activity');
   }
 
   detectSuspiciousIframes() {
     const iframes = document.querySelectorAll('iframe');
+    let hiddenIframeCount = 0;
     
     iframes.forEach(iframe => {
       const src = iframe.src || '';
       const style = window.getComputedStyle(iframe);
       
-      // Hidden iframe
-      if (style.display === 'none' || style.visibility === 'hidden' || 
-          parseInt(style.width) <= 1 || parseInt(style.height) <= 1) {
-        this.fraudScore += 40;
-        this.detectedThreats.push('⚠️ Hidden iframe detected - possible data harvesting');
-      }
+      // Hidden iframe - but check if it's actually suspicious
+      const isHidden = style.display === 'none' || style.visibility === 'hidden' || 
+                       parseInt(style.width) <= 1 || parseInt(style.height) <= 1;
       
-      // Cross-origin iframe
-      try {
-        const iframeDomain = new URL(src).hostname;
-        if (iframeDomain !== this.domain) {
-          console.log('[HelioRa Fraud] Cross-origin iframe:', iframeDomain);
+      if (isHidden) {
+        // Check if it's from a known legitimate service (analytics, payment processors, etc)
+        const legitimateIframes = ['google', 'stripe', 'paypal', 'recaptcha', 'analytics'];
+        const isLegitimate = legitimateIframes.some(service => src.includes(service));
+        
+        if (!isLegitimate && src) {
+          hiddenIframeCount++;
         }
-      } catch (err) {}
+      }
     });
+    
+    // Only flag if multiple hidden iframes from unknown sources
+    if (hiddenIframeCount >= 2) {
+      this.fraudScore += 40;
+      this.detectedThreats.push(`WARNING: ${hiddenIframeCount} hidden iframes detected - possible data harvesting`);
+      console.log('[HelioRa Fraud] Suspicious hidden iframes:', hiddenIframeCount);
+    }
   }
 
   detectSyntheticMedia() {
@@ -501,39 +525,58 @@ class AdvancedFraudDetector {
     `;
     
     warning.innerHTML = `
-      <div style="font-size: 64px; margin-bottom: 20px;">🚨</div>
-      <h1 style="color: #F44336; font-size: 28px; margin-bottom: 20px;">FRAUD DETECTED</h1>
-      <p style="font-size: 16px; color: #333; margin-bottom: 20px; line-height: 1.6;">
-        <strong>HelioRa has detected ${this.detectedThreats.length} fraud indicator(s) on this page.</strong>
+      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#F44336" stroke-width="2" style="margin: 0 auto 20px;">
+        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+        <line x1="12" y1="9" x2="12" y2="13"></line>
+        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+      </svg>
+      <h1 style="color: #F44336; font-size: 28px; margin-bottom: 15px; font-weight: 700;">Security Threat Detected</h1>
+      <p style="font-size: 15px; color: #555; margin-bottom: 25px; line-height: 1.5;">
+        HelioRa has identified <strong>${this.detectedThreats.length} security issue(s)</strong> on this page that may indicate fraudulent activity.
       </p>
-      <div style="text-align: left; background: #f5f5f5; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-        ${this.detectedThreats.map(threat => `<p style="margin: 10px 0; color: #d32f2f;">• ${threat}</p>`).join('')}
+      <div style="text-align: left; background: #fff3e0; border-left: 4px solid #ff9800; padding: 20px; border-radius: 6px; margin-bottom: 25px; max-height: 200px; overflow-y: auto;">
+        <h3 style="margin: 0 0 12px 0; color: #e65100; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Detected Threats</h3>
+        ${this.detectedThreats.map(threat => {
+          // Remove emojis from threat messages
+          const cleanThreat = threat.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
+          return `<p style="margin: 8px 0; color: #d84315; font-size: 13px; line-height: 1.5;">▪ ${cleanThreat}</p>`;
+        }).join('')}
       </div>
-      <div style="display: flex; gap: 15px; justify-content: center;">
+      <div style="background: #f5f5f5; padding: 15px; border-radius: 6px; margin-bottom: 25px;">
+        <p style="font-size: 13px; color: #666; margin: 0; line-height: 1.6;">
+          <strong>Recommendation:</strong> Leave this site immediately. Do not enter any personal information, passwords, or payment details.
+        </p>
+      </div>
+      <div style="display: flex; gap: 12px; justify-content: center;">
         <button id="heliora-leave" style="
           flex: 1;
-          padding: 15px 30px;
-          background: #F44336;
+          padding: 14px 28px;
+          background: linear-gradient(135deg, #F44336, #D32F2F);
           color: white;
           border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: bold;
+          border-radius: 6px;
+          font-size: 15px;
+          font-weight: 600;
           cursor: pointer;
-        ">🛡️ Leave This Site</button>
+          box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+          transition: all 0.2s;
+        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(244, 67, 54, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(244, 67, 54, 0.3)';">Leave This Site (Recommended)</button>
         <button id="heliora-continue" style="
-          flex: 1;
-          padding: 15px 30px;
-          background: #ccc;
+          flex: 0.6;
+          padding: 14px 20px;
+          background: white;
           color: #666;
-          border: none;
-          border-radius: 8px;
-          font-size: 16px;
-          font-weight: bold;
+          border: 2px solid #ddd;
+          border-radius: 6px;
+          font-size: 14px;
+          font-weight: 600;
           cursor: pointer;
-        ">Continue (Risky)</button>
+          transition: all 0.2s;
+        " onmouseover="this.style.borderColor='#999';" onmouseout="this.style.borderColor='#ddd';">Continue Anyway</button>
       </div>
-      <p style="font-size: 12px; color: #999; margin-top: 20px;">Protected by HelioRa Security</p>
+      <p style="font-size: 11px; color: #999; margin-top: 20px;">
+        Protected by HelioRa Security • <span style="color: #F44336; font-weight: 600;">Fraud Score: ${this.fraudScore}/100</span>
+      </p>
     `;
     
     overlay.appendChild(warning);
