@@ -29,8 +29,17 @@
         "<all_urls>"
       ],
       "js": [
+        "cookie_blocker.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    },
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
         "content_script.js",
-        "cookie_blocker.js",
         "fraud_detector.js"
       ],
       "run_at": "document_idle"
