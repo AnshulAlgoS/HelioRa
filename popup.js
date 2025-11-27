@@ -334,9 +334,20 @@ function setupEventListeners() {
     });
   }
   
-  // Privacy Lockdown button
+  // Privacy Lockdown button - Load initial state
   const privacyLockdownBtn = document.getElementById('privacyLockdownBtn');
   if (privacyLockdownBtn) {
+    // Load initial lockdown state
+    chrome.runtime.sendMessage({ action: 'getSettings' }, (response) => {
+      if (response?.settings?.privacyLockdown) {
+        privacyLockdownBtn.classList.add('lockdown-active');
+        const btnText = privacyLockdownBtn.querySelector('.btn-text');
+        if (btnText) {
+          btnText.textContent = 'Locked';
+        }
+      }
+    });
+    
     privacyLockdownBtn.addEventListener('click', async () => {
       try {
         const response = await chrome.runtime.sendMessage({
@@ -354,7 +365,7 @@ function setupEventListeners() {
           
           showNotification(
             response.enabled ? 
-              '🔒 Privacy Lockdown ACTIVE - All camera/mic/GPS blocked' : 
+              'Privacy Lockdown ACTIVE - All camera/mic/GPS blocked' : 
               'Privacy Lockdown Disabled',
             response.enabled ? 'warning' : 'success'
           );

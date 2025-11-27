@@ -293,24 +293,52 @@ body {
 }
 
 .action-btn.lockdown-active {
-    background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
-    color: white;
-    border-color: #c62828;
-    box-shadow: 0 4px 15px rgba(198, 40, 40, 0.4);
-    animation: pulse-lockdown 2s infinite;
+    background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%) !important;
+    color: white !important;
+    border-color: #c62828 !important;
+    box-shadow: 0 4px 15px rgba(198, 40, 40, 0.6), 0 0 0 2px rgba(198, 40, 40, 0.2) !important;
+    animation: pulse-lockdown 2s infinite !important;
+    position: relative !important;
+}
+
+.action-btn.lockdown-active::before {
+    content: '';
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: linear-gradient(135deg, #ff5252, #c62828);
+    border-radius: 12px;
+    z-index: -1;
+    opacity: 0.5;
+    animation: pulse-border 2s infinite;
 }
 
 .action-btn.lockdown-active:hover {
-    background: linear-gradient(135deg, #b71c1c 0%, #a51717 100%);
-    transform: translateY(-2px);
+    background: linear-gradient(135deg, #b71c1c 0%, #a51717 100%) !important;
+    transform: translateY(-2px) !important;
+}
+
+.action-btn.lockdown-active svg {
+    filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.8));
 }
 
 @keyframes pulse-lockdown {
     0%, 100% {
-        box-shadow: 0 4px 15px rgba(198, 40, 40, 0.4);
+        box-shadow: 0 4px 15px rgba(198, 40, 40, 0.6), 0 0 0 2px rgba(198, 40, 40, 0.2);
     }
     50% {
-        box-shadow: 0 4px 20px rgba(198, 40, 40, 0.8);
+        box-shadow: 0 4px 25px rgba(198, 40, 40, 1), 0 0 0 3px rgba(198, 40, 40, 0.4);
+    }
+}
+
+@keyframes pulse-border {
+    0%, 100% {
+        opacity: 0.3;
+    }
+    50% {
+        opacity: 0.6;
     }
 }
 
