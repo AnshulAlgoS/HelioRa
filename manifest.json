@@ -14,7 +14,8 @@
     "scripting",
     "notifications",
     "webRequest",
-    "webNavigation"
+    "webNavigation",
+    "cookies"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -28,7 +29,9 @@
         "<all_urls>"
       ],
       "js": [
-        "content_script.js"
+        "content_script.js",
+        "cookie_blocker.js",
+        "fraud_detector.js"
       ],
       "run_at": "document_idle"
     }
@@ -50,6 +53,16 @@
       }
     ]
   },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "warning.html"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ],
   "icons": {
     "16": "icons/icon16.png",
     "48": "icons/icon48.png",
