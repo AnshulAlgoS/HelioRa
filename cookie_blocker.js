@@ -31,11 +31,22 @@ class CookieBannerBlocker {
       // Inject CSS to hide cookie banners immediately
       this.injectHidingCSS();
       
-      // Wait for page to load
+      // Start blocking immediately, don't wait
+      this.blockCookieBanners();
+      
+      // Also run after DOM loads
       if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', () => this.blockCookieBanners());
+        document.addEventListener('DOMContentLoaded', () => {
+          this.blockCookieBanners();
+          // Run again after a short delay for late-loading banners
+          setTimeout(() => this.blockCookieBanners(), 1000);
+          setTimeout(() => this.blockCookieBanners(), 3000);
+        });
       } else {
-        this.blockCookieBanners();
+        // Already loaded, run multiple times
+        setTimeout(() => this.blockCookieBanners(), 500);
+        setTimeout(() => this.blockCookieBanners(), 1500);
+        setTimeout(() => this.blockCookieBanners(), 3000);
       }
 
       // Watch for dynamically added cookie banners
@@ -48,81 +59,158 @@ class CookieBannerBlocker {
     const style = document.createElement('style');
     style.id = 'heliora-cookie-blocker';
     style.textContent = `
-      /* Hide common cookie banner classes */
+      /* Hide ALL common cookie banner patterns */
       #onetrust-banner-sdk,
       #onetrust-consent-sdk,
       .onetrust-pc-dark-filter,
+      #onetrust-pc-sdk,
       #CybotCookiebotDialog,
+      #CybotCookiebotDialogBodyUnderlay,
       .cky-consent-container,
+      .cky-consent-bar,
       #usercentrics-root,
       .didomi-popup,
+      .didomi-host,
       #truste-consent-track,
       .qc-cmp2-container,
       #qc-cmp2-ui,
       .fc-consent-root,
       .cc-window,
       .cc-banner,
+      .cookie-banner,
+      .cookie-consent,
+      .cookie-notice,
+      .cookie-bar,
+      .cookie-popup,
+      .gdpr-banner,
+      .gdpr-consent,
+      .consent-banner,
+      .consent-bar,
+      .privacy-banner,
+      .privacy-notice,
       [class*="cookie-banner"],
       [class*="cookie-consent"],
+      [class*="cookie-notice"],
+      [class*="cookie-bar"],
+      [class*="cookie-popup"],
       [class*="gdpr-banner"],
+      [class*="gdpr-consent"],
+      [class*="consent-banner"],
       [id*="cookie-banner"],
-      [id*="cookie-consent"] {
+      [id*="cookie-consent"],
+      [id*="cookie-notice"],
+      [id*="gdpr"],
+      [aria-label*="cookie" i],
+      [aria-label*="consent" i],
+      .osano-cm-window,
+      #osano-cm-window,
+      .termly-styles-root,
+      #termly-code-snippet-support {
         display: none !important;
         visibility: hidden !important;
         opacity: 0 !important;
         pointer-events: none !important;
+        height: 0 !important;
+        width: 0 !important;
+        position: absolute !important;
+        z-index: -9999 !important;
       }
       
-      /* Re-enable scrolling if disabled by cookie banner */
-      body.modal-open {
+      /* Hide overlays and backdrops */
+      .modal-backdrop,
+      .cookie-overlay,
+      [class*="cookie"][class*="overlay"],
+      [class*="consent"][class*="overlay"] {
+        display: none !important;
+        visibility: hidden !important;
+      }
+      
+      /* Re-enable scrolling */
+      body.modal-open,
+      body[style*="overflow: hidden"],
+      html[style*="overflow: hidden"] {
         overflow: auto !important;
+      }
+      
+      /* Hide any fixed/sticky elements at bottom with cookie text */
+      div[style*="position: fixed"][style*="bottom"],
+      div[style*="position: sticky"][style*="bottom"] {
+        display: none !important;
       }
     `;
     
     (document.head || document.documentElement).appendChild(style);
-    console.log('[HelioRa Cookie] Injected hiding CSS');
+    console.log('[HelioRa Cookie] Injected aggressive hiding CSS');
   }
 
   blockCookieBanners() {
-    console.log('[HelioRa] Searching for cookie banners...');
+    console.log('[HelioRa] Aggressively searching for cookie banners...');
 
-    // Common cookie banner selectors
+    // EVERY possible cookie banner selector
     const cookieBannerSelectors = [
-      // Generic selectors
+      // Generic pattern matching (most aggressive)
       '[class*="cookie"]',
       '[id*="cookie"]',
+      '[class*="Cookie"]',
+      '[id*="Cookie"]',
       '[class*="gdpr"]',
       '[id*="gdpr"]',
+      '[class*="GDPR"]',
+      '[id*="GDPR"]',
       '[class*="consent"]',
       '[id*="consent"]',
-      '[class*="privacy-banner"]',
-      '[id*="privacy-banner"]',
+      '[class*="Consent"]',
+      '[id*="Consent"]',
+      '[class*="privacy"]',
+      '[id*="privacy"]',
+      '[class*="banner"]',
       '[class*="notice"]',
+      '[class*="popup"]',
       '[aria-label*="cookie" i]',
       '[aria-label*="consent" i]',
+      '[aria-label*="privacy" i]',
       '[role="dialog"]',
-      '[role="banner"]',
+      '[role="alertdialog"]',
       
-      // Specific cookie banner libraries
+      // Major cookie consent platforms
       '#onetrust-banner-sdk',
       '#onetrust-consent-sdk',
+      '#onetrust-pc-sdk',
       '.onetrust-pc-dark-filter',
-      '#cookieConsent',
-      '.cookie-banner',
-      '.cookie-consent',
-      '.gdpr-banner',
-      '.cc-window',
-      '.cc-banner',
-      '.cookie-notice',
       '#CybotCookiebotDialog',
+      '#CybotCookiebotDialogBodyUnderlay',
       '.cky-consent-container',
+      '.cky-consent-bar',
       '#usercentrics-root',
       '.didomi-popup',
+      '.didomi-host',
       '#truste-consent-track',
       '.qc-cmp2-container',
       '#qc-cmp2-ui',
       '.fc-consent-root',
-      '#sp_message_container_'
+      '.cc-window',
+      '.cc-banner',
+      '#cookieConsent',
+      '.osano-cm-window',
+      '#osano-cm-window',
+      '.termly-styles-root',
+      '#termly-code-snippet-support',
+      
+      // Generic cookie classes
+      '.cookie-banner',
+      '.cookie-consent',
+      '.cookie-notice',
+      '.cookie-bar',
+      '.cookie-popup',
+      '.cookie-message',
+      '.cookie-warning',
+      '.cookie-notification',
+      '.gdpr-banner',
+      '.gdpr-consent',
+      '.consent-banner',
+      '.consent-bar',
+      '.privacy-banner',
+      '.privacy-notice'
     ];
 
     let bannersFound = 0;
@@ -166,6 +254,9 @@ class CookieBannerBlocker {
     
     // Also remove cookie consent overlays/backdrops
     this.removeOverlays();
+    
+    // Nuclear option: remove ANY fixed/sticky element with cookie text
+    this.removeFixedCookieElements();
 
     if (bannersFound > 0) {
       console.log(`[HelioRa] Blocked ${bannersFound} cookie banner(s)`);
@@ -176,6 +267,48 @@ class CookieBannerBlocker {
         count: bannersFound
       }).catch(() => {});
     }
+  }
+  
+  removeFixedCookieElements() {
+    // Find ALL fixed/sticky positioned elements
+    const allElements = document.querySelectorAll('*');
+    
+    allElements.forEach(element => {
+      try {
+        const style = window.getComputedStyle(element);
+        const position = style.position;
+        
+        // Check if it's fixed or sticky
+        if (position === 'fixed' || position === 'sticky') {
+          const text = element.textContent?.toLowerCase() || '';
+          const classes = element.className?.toString().toLowerCase() || '';
+          const id = element.id?.toLowerCase() || '';
+          
+          // Check if it contains cookie-related keywords
+          const hasCookieText = text.includes('cookie') || text.includes('consent') || 
+                                text.includes('privacy') || text.includes('gdpr') ||
+                                text.includes('accept') || text.includes('reject');
+          
+          const hasCookieClass = classes.includes('cookie') || classes.includes('consent') ||
+                                 classes.includes('gdpr') || classes.includes('privacy');
+          
+          const hasCookieId = id.includes('cookie') || id.includes('consent') ||
+                              id.includes('gdpr') || id.includes('privacy');
+          
+          // If it's a cookie banner, nuke it
+          if ((hasCookieText && text.length < 5000) || hasCookieClass || hasCookieId) {
+            element.style.display = 'none';
+            element.style.visibility = 'hidden';
+            element.style.opacity = '0';
+            element.style.zIndex = '-9999';
+            element.remove();
+            console.log('[HelioRa Cookie] Removed fixed cookie element:', element.className || element.id);
+          }
+        }
+      } catch (err) {
+        // Ignore errors
+      }
+    });
   }
   
   removeOverlays() {
