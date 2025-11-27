@@ -292,6 +292,28 @@ body {
     color: var(--text-primary);
 }
 
+.action-btn.lockdown-active {
+    background: linear-gradient(135deg, #c62828 0%, #b71c1c 100%);
+    color: white;
+    border-color: #c62828;
+    box-shadow: 0 4px 15px rgba(198, 40, 40, 0.4);
+    animation: pulse-lockdown 2s infinite;
+}
+
+.action-btn.lockdown-active:hover {
+    background: linear-gradient(135deg, #b71c1c 0%, #a51717 100%);
+    transform: translateY(-2px);
+}
+
+@keyframes pulse-lockdown {
+    0%, 100% {
+        box-shadow: 0 4px 15px rgba(198, 40, 40, 0.4);
+    }
+    50% {
+        box-shadow: 0 4px 20px rgba(198, 40, 40, 0.8);
+    }
+}
+
 .btn-icon {
     font-size: 18px;
     line-height: 1;
