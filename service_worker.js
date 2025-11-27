@@ -32,8 +32,9 @@ let settings = {
   behaviorDetection: true,
   networkFirewall: true,
   autoBlock: true,
-  blockCookies: false, // Cookie blocking
-  blockThirdPartyCookies: true // Block third-party cookies
+  autoCookieDecline: true, // Auto-decline cookie banners (enabled by default)
+  blockCookies: false, // Block all cookies
+  blockThirdPartyCookies: true // Block third-party cookies only
 };
 
 // Dynamic rule ID counter
