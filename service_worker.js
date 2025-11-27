@@ -438,20 +438,32 @@ async function analyzePage(url, tabId) {
       threats.push('Domain blocked by user');
       detectionReasons.push('User blacklisted');
     } else {
-      // Whitelist legitimate security/tech domains to avoid false positives
+      // Whitelist legitimate security/tech domains and tools to avoid false positives
       const legitimateDomains = [
         'github.com', 'stackoverflow.com', 'security.org', 'owasp.org',
         'virustotal.com', 'malwarebytes.com', 'kaspersky.com', 'norton.com',
         'phish.report', 'haveibeenpwned.com', 'bleepingcomputer.com',
         'krebsonsecurity.com', 'threatpost.com', 'securityweek.com',
-        'reddit.com', 'wikipedia.org', 'cloudflare.com'
+        'reddit.com', 'wikipedia.org', 'cloudflare.com', 'scamadviser.com',
+        'expressvpn.com', 'nordvpn.com'
+      ];
+      
+      // Whitelist legitimate tool patterns
+      const legitimateTools = [
+        'downloader', 'converter', 'generator', 'editor', 'viewer', 
+        'reader', 'player', 'maker', 'creator', 'analyzer', 'checker',
+        'scanner', 'validator'
       ];
       
       const isLegitimate = legitimateDomains.some(legit => 
         domain.endsWith(legit) || domain === legit
       );
       
-      if (!isLegitimate) {
+      // Check if it's a legitimate tool website
+      const isLegitimateTool = legitimateTools.some(tool => domain.includes(tool)) && 
+                               (domain.includes('.com') || domain.includes('.net') || domain.includes('.org'));
+      
+      if (!isLegitimate && !isLegitimateTool) {
         // 2. Check for malware patterns (HIGH RISK +60) - only in main domain
         THREAT_PATTERNS.malware.forEach(pattern => {
           if (domain.includes(pattern)) {
@@ -462,13 +474,19 @@ async function analyzePage(url, tabId) {
         });
         
         // 3. Check for dangerous patterns (HIGH RISK +70) - only in domain, not URL path
-        THREAT_PATTERNS.dangerous.forEach(pattern => {
-          if (domain.includes(pattern) && !urlObj.pathname.toLowerCase().includes(pattern)) {
-            riskScore += 70;
-            threats.push(`Dangerous keyword in domain: ${pattern}`);
-            detectionReasons.push(`Dangerous pattern in domain: ${pattern}`);
-          }
-        });
+        // But exclude legitimate security/scam-checking sites
+        const isSecurityChecker = domain.includes('scamadvis') || domain.includes('scamchecker') || 
+                                   domain.includes('fraudcheck') || domain.includes('phishcheck');
+        
+        if (!isSecurityChecker) {
+          THREAT_PATTERNS.dangerous.forEach(pattern => {
+            if (domain.includes(pattern) && !urlObj.pathname.toLowerCase().includes(pattern)) {
+              riskScore += 70;
+              threats.push(`Dangerous keyword in domain: ${pattern}`);
+              detectionReasons.push(`Dangerous pattern in domain: ${pattern}`);
+            }
+          });
+        }
         
         // 4. Check for phishing patterns (MEDIUM-HIGH RISK +40) - only in suspicious contexts
         let phishingPatternCount = 0;
@@ -501,12 +519,19 @@ async function analyzePage(url, tabId) {
       }
       
       // 6. Typosquatting detection (HIGH RISK +50)
+      // But exclude legitimate third-party tools that mention the brand
       for (const [brand, legitimate] of Object.entries(POPULAR_DOMAINS)) {
         if (domain.includes(brand) && domain !== legitimate) {
           if (!domain.endsWith(legitimate)) {
-            riskScore += 50;
-            threats.push(`Possible typosquatting of ${legitimate}`);
-            detectionReasons.push(`Typosquatting: ${legitimate}`);
+            // Check if it's a legitimate tool site (downloader, converter, etc)
+            const isToolSite = legitimateTools.some(tool => domain.includes(tool));
+            
+            // Only flag if it's NOT a tool site AND looks suspicious
+            if (!isToolSite || domain.length < 15) {
+              riskScore += 50;
+              threats.push(`Possible typosquatting of ${legitimate}`);
+              detectionReasons.push(`Typosquatting: ${legitimate}`);
+            }
           }
         }
       }
