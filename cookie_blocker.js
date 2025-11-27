@@ -4,7 +4,7 @@ console.log('[HelioRa Cookie Blocker] Starting...');
 
 // STEP 1: Inject aggressive CSS immediately (runs even before DOM loads)
 const hideCSS = `
-/* Cookie banners */
+/* Cookie banners - General */
 #onetrust-banner-sdk,
 #onetrust-consent-sdk,
 #CybotCookiebotDialog,
@@ -47,18 +47,36 @@ const hideCSS = `
   z-index: -9999 !important;
 }
 
-/* Overlays and backdrops */
-.modal-backdrop,
-.cookie-overlay,
-[class*="overlay"],
-[style*="position: fixed"][style*="z-index"] {
+/* Amazon-specific */
+span[data-action="sp-cc"],
+form[action*="cookie"],
+div[class*="sp-cc"],
+#sp-cc-container,
+[id*="sp-cc"],
+[class*="sp-cc"],
+[aria-label*="cookie" i],
+[aria-labelledby*="cookie" i] {
+  display: none !important;
+  visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
+/* Overlays and backdrops */
+.modal-backdrop,
+.cookie-overlay,
+[class*="overlay"],
+div[style*="position: fixed"][style*="background"],
+div[style*="position: fixed"][style*="z-index"] {
+  opacity: 0 !important;
+  pointer-events: none !important;
+  display: none !important;
+}
+
 /* Re-enable scrolling */
 body.modal-open,
-body[style*="overflow: hidden"] {
+body[style*="overflow: hidden"],
+html[style*="overflow: hidden"] {
   overflow: auto !important;
 }
 `;
@@ -96,6 +114,14 @@ function nukeCookieBanners() {
     '#truste-consent-track',
     '#teconsent',
     
+    // Amazon specific
+    'span[data-action="sp-cc"]',
+    'form[action*="cookie"]',
+    'div[class*="sp-cc"]',
+    '#sp-cc-container',
+    '[id*="sp-cc"]',
+    '[data-action*="cookie"]',
+    
     // Generic patterns
     '.cookie-banner',
     '.cookie-consent',
@@ -104,6 +130,7 @@ function nukeCookieBanners() {
     '.cookie-dialog',
     '.cookie-modal',
     '.cookie-bar',
+    '.cookie-preferences',
     '.gdpr-banner',
     '.gdpr-consent',
     '.privacy-banner',
@@ -116,8 +143,10 @@ function nukeCookieBanners() {
     '[id*="Cookie"]',
     '[class*="cookieConsent"]',
     '[class*="CookieConsent"]',
+    '[class*="cookie-preferences"]',
     '[aria-label*="cookie" i]',
     '[aria-label*="consent" i]',
+    '[aria-labelledby*="cookie" i]',
   ];
 
   // Remove by selectors
@@ -136,24 +165,47 @@ function nukeCookieBanners() {
   // Nuclear option: Find ANY fixed/sticky element with cookie-related content
   const allElements = document.querySelectorAll('*');
   allElements.forEach(el => {
-    const style = window.getComputedStyle(el);
-    const position = style.position;
-    
-    if (position === 'fixed' || position === 'sticky') {
-      const text = el.innerText?.toLowerCase() || '';
-      const id = el.id?.toLowerCase() || '';
-      const className = el.className?.toLowerCase() || '';
+    try {
+      const style = window.getComputedStyle(el);
+      const position = style.position;
+      const zIndex = parseInt(style.zIndex) || 0;
       
-      const cookieKeywords = ['cookie', 'consent', 'gdpr', 'privacy', 'we use', 'accept', 'reject', 'manage preferences'];
-      
-      const hasCookieContent = cookieKeywords.some(keyword => 
-        text.includes(keyword) || id.includes(keyword) || className.includes(keyword)
-      );
-      
-      if (hasCookieContent) {
-        el.remove();
-        removed++;
+      if (position === 'fixed' || position === 'sticky' || zIndex > 999) {
+        const text = el.innerText?.toLowerCase() || '';
+        const id = el.id?.toLowerCase() || '';
+        const className = el.className?.toString().toLowerCase() || '';
+        const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
+        
+        const cookieKeywords = [
+          'cookie', 'consent', 'gdpr', 'privacy', 
+          'we use cookies', 'we use similar tools',
+          'accept', 'decline', 'reject', 
+          'manage preferences', 'cookie preferences',
+          'cookie notice', 'your choice applies',
+          'third-party advertising', 'personalized ads'
+        ];
+        
+        const hasCookieContent = cookieKeywords.some(keyword => 
+          text.includes(keyword) || 
+          id.includes(keyword) || 
+          className.includes(keyword) ||
+          ariaLabel.includes(keyword)
+        );
+        
+        // Extra check for Amazon-style long cookie text
+        const hasLongCookieText = text.length > 100 && (
+          text.includes('we use cookies') || 
+          text.includes('cookie preferences') ||
+          text.includes('advertising cookies')
+        );
+        
+        if (hasCookieContent || hasLongCookieText) {
+          el.remove();
+          removed++;
+        }
       }
+    } catch (e) {
+      // Skip elements that can't be checked
     }
   });
 
@@ -180,6 +232,7 @@ function clickDeclineButtons() {
     // Text-based (most common)
     'button:not([class*="accept"]):not([id*="accept"])',
     'a:not([class*="accept"]):not([id*="accept"])',
+    'input[type="button"]:not([class*="accept"])',
     
     // Specific platforms
     '#onetrust-reject-all-handler',
@@ -187,12 +240,14 @@ function clickDeclineButtons() {
     '[class*="reject"]',
     '[id*="decline"]',
     '[class*="decline"]',
+    '[data-action*="decline"]',
+    '[data-action*="reject"]',
     '[aria-label*="reject" i]',
     '[aria-label*="decline" i]',
   ];
 
-  const declineKeywords = ['reject', 'decline', 'deny', 'refuse', 'no', 'necessary only', 'essential only'];
-  const avoidKeywords = ['accept', 'agree', 'allow', 'ok'];
+  const declineKeywords = ['reject', 'decline', 'deny', 'refuse', 'no thanks', 'necessary only', 'essential only', 'no, thanks'];
+  const avoidKeywords = ['accept', 'agree', 'allow', 'ok', 'got it'];
 
   let clicked = false;
 
@@ -202,14 +257,33 @@ function clickDeclineButtons() {
       buttons.forEach(btn => {
         const text = btn.innerText?.toLowerCase() || '';
         const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+        const value = btn.value?.toLowerCase() || '';
         
-        const isDecline = declineKeywords.some(kw => text.includes(kw) || ariaLabel.includes(kw));
-        const isAccept = avoidKeywords.some(kw => text.includes(kw) || ariaLabel.includes(kw));
+        const isDecline = declineKeywords.some(kw => 
+          text.includes(kw) || ariaLabel.includes(kw) || value.includes(kw)
+        );
+        const isAccept = avoidKeywords.some(kw => 
+          text.includes(kw) || ariaLabel.includes(kw) || value.includes(kw)
+        );
         
         if (isDecline && !isAccept && !clicked) {
-          console.log('[HelioRa Cookie] Clicking decline button:', text || ariaLabel);
+          console.log('[HelioRa Cookie] Clicking decline button:', text || ariaLabel || value);
           btn.click();
           clicked = true;
+          
+          // After clicking, remove the entire parent container
+          setTimeout(() => {
+            let parent = btn.parentElement;
+            while (parent && parent !== document.body) {
+              const parentText = parent.innerText?.toLowerCase() || '';
+              if (parentText.includes('cookie') || parentText.includes('consent')) {
+                parent.remove();
+                console.log('[HelioRa Cookie] Removed parent container after click');
+                break;
+              }
+              parent = parent.parentElement;
+            }
+          }, 100);
         }
       });
     } catch (e) {

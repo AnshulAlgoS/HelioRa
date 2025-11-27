@@ -334,6 +334,29 @@ function setupEventListeners() {
     });
   }
   
+  // Privacy Lockdown button
+  const privacyLockdownBtn = document.getElementById('privacyLockdownBtn');
+  if (privacyLockdownBtn) {
+    privacyLockdownBtn.addEventListener('click', async () => {
+      try {
+        const response = await chrome.runtime.sendMessage({
+          action: 'togglePrivacyLockdown'
+        });
+        
+        if (response?.success) {
+          const status = response.enabled ? 'ENABLED' : 'DISABLED';
+          privacyLockdownBtn.classList.toggle('active', response.enabled);
+          privacyLockdownBtn.style.background = response.enabled ? 
+            'linear-gradient(135deg, #c62828 0%, #b71c1c 100%)' : '';
+          showNotification(`Privacy Lockdown ${status}`, 'success');
+        }
+      } catch (error) {
+        console.error('[HelioRa Popup] Lockdown error:', error);
+        showNotification('Failed to toggle lockdown', 'error');
+      }
+    });
+  }
+  
   // Blacklist button
   const blacklistBtn = document.getElementById('blacklistBtn');
   if (blacklistBtn) {
