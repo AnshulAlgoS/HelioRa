@@ -149,8 +149,21 @@ chrome.storage.local.get(['stats', 'blockedDomains', 'firewallRules', 'settings'
   console.log('[HelioRa] Loaded data:', { 
     stats, 
     blockedDomains: blockedDomains.length,
-    firewallRules: Object.keys(firewallRules).length 
+    firewallRules: Object.keys(firewallRules).length,
+    privacyLockdown: settings.privacyLockdown
   });
+  
+  // Broadcast lockdown state to all tabs
+  if (settings.privacyLockdown) {
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach(tab => {
+        chrome.tabs.sendMessage(tab.id, {
+          action: 'setPrivacyLockdown',
+          enabled: true
+        }).catch(() => {});
+      });
+    });
+  }
   
   // Reapply all firewall rules and blocked domains
   for (const domain of blockedDomains) {
