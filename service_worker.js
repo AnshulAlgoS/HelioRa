@@ -610,7 +610,26 @@ async function analyzePage(url, tabId) {
         detectionReasons.push('No HTTPS');
       }
       
-      // 8. Suspicious TLD check (MEDIUM RISK +30)
+      // 8. Tunnel domain detection (CRITICAL RISK +80) - CamPhish indicator
+      const tunnelDomains = [
+        'ngrok.io', 'ngrok-free.app', 'ngrok.app',
+        'trycloudflare.com', 'cloudflare.app',
+        'serveo.net', 'localhost.run', 'loca.lt',
+        'tunnelto.dev', 'localtunnel.me', 'pagekite.me'
+      ];
+      
+      const isTunnelDomain = tunnelDomains.some(tunnel => 
+        domain.includes(tunnel) || domain.endsWith(tunnel)
+      );
+      
+      if (isTunnelDomain) {
+        riskScore += 80;
+        threats.push('Temporary tunnel hosting detected - common in surveillance attacks');
+        detectionReasons.push('CamPhish-style tunnel domain');
+        status = 'dangerous'; // Override status
+      }
+      
+      // 9. Suspicious TLD check (MEDIUM RISK +30)
       const suspiciousTLDs = ['.tk', '.ml', '.ga', '.cf', '.gq', '.xyz', '.top', '.pw'];
       if (suspiciousTLDs.some(tld => domain.endsWith(tld))) {
         riskScore += 30;
