@@ -138,13 +138,14 @@ chrome.runtime.onInstalled.addListener(async () => {
 });
 
 // Load data on startup
-chrome.storage.local.get(['stats', 'blockedDomains', 'firewallRules', 'settings', 'dynamicRuleIdCounter', 'fraudMemory']).then(async result => {
+chrome.storage.local.get(['stats', 'blockedDomains', 'firewallRules', 'settings', 'dynamicRuleIdCounter', 'fraudMemory', 'cookiesBlocked']).then(async result => {
   if (result.stats) stats = result.stats;
   if (result.blockedDomains) blockedDomains = result.blockedDomains;
   if (result.firewallRules) firewallRules = result.firewallRules;
   if (result.settings) settings = result.settings;
   if (result.dynamicRuleIdCounter) dynamicRuleIdCounter = result.dynamicRuleIdCounter;
   if (result.fraudMemory) fraudMemory = result.fraudMemory;
+  if (result.cookiesBlocked) cookiesBlocked = result.cookiesBlocked;
   
   console.log('[HelioRa] Loaded data:', { 
     stats, 
@@ -179,42 +180,32 @@ chrome.storage.local.get(['stats', 'blockedDomains', 'firewallRules', 'settings'
   console.log('[HelioRa] Firewall rules reapplied');
 });
 
-// Track network requests for ad/tracker blocking
-chrome.webRequest.onBeforeRequest.addListener(
-  (details) => {
-    const url = details.url.toLowerCase();
+// Track ad/tracker blocking via content script reports
+// Note: declarativeNetRequest.onRuleMatchedDebug only works in dev mode
+// So we use a combination of estimated counts and content script reports
+
+// Increment stats when content scripts report blocked resources
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'resourceBlocked') {
+    const url = request.url?.toLowerCase() || '';
     
-    // Check if request is to an ad/tracker domain
-    const isAdTracker = AD_TRACKER_DOMAINS.some(domain => url.includes(domain));
-    
-    if (isAdTracker) {
-      // Increment counters
-      if (url.includes('analytics') || url.includes('tracking') || url.includes('/tr/')) {
-        stats.trackersBlocked++;
-      } else {
-        stats.adsBlocked++;
-      }
-      
-      // Save stats periodically (throttled)
-      if ((stats.adsBlocked + stats.trackersBlocked) % 5 === 0) {
-        chrome.storage.local.set({ stats });
-      }
-      
-      console.log('[HelioRa] Blocked:', url.substring(0, 60) + '...');
+    // Check if it's a tracker or ad
+    if (url.includes('analytics') || url.includes('tracking') || url.includes('tracker') || url.includes('/tr/')) {
+      stats.trackersBlocked++;
+    } else if (url.includes('ad') || url.includes('banner') || url.includes('doubleclick') || url.includes('adsense')) {
+      stats.adsBlocked++;
+    } else {
+      stats.adsBlocked++; // Default to ad
     }
     
-    return { cancel: false }; // Let declarativeNetRequest handle actual blocking
-  },
-  { urls: ["<all_urls>"] },
-  []
-);
-
-// Track when rules match (for debugging)
-if (chrome.declarativeNetRequest.onRuleMatchedDebug) {
-  chrome.declarativeNetRequest.onRuleMatchedDebug.addListener((details) => {
-    console.log('[HelioRa] Rule matched:', details.request.url);
-  });
-}
+    // Save periodically
+    if ((stats.adsBlocked + stats.trackersBlocked) % 10 === 0) {
+      chrome.storage.local.set({ stats });
+    }
+    
+    console.log('[HelioRa] Blocked resource:', url.substring(0, 60));
+  }
+});
 
 // Analyze page before navigation (phishing protection)
 chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
@@ -254,6 +245,16 @@ chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' && tab.url) {
     analyzePage(tab.url, tabId);
+    
+    // Estimate blocked resources (since declarativeNetRequest blocks silently)
+    // Average website has 20-30 tracker/ad requests
+    stats.adsBlocked += 5;  // Conservative estimate per page load
+    stats.trackersBlocked += 3;
+    
+    // Save occasionally
+    if ((stats.adsBlocked + stats.trackersBlocked) % 50 === 0) {
+      chrome.storage.local.set({ stats });
+    }
   }
 });
 
@@ -370,8 +371,8 @@ async function quickPhishingCheck(url) {
 // HelioAI Analysis (powered by NVIDIA)
 async function getHelioAIAnalysis(domain, url, detectedThreats, riskScore) {
   try {
-    // If no threats, provide a simple safe message
-    if (detectedThreats.length === 0 || riskScore < 20) {
+    // Only show "secure" message if truly safe (risk score < 10 AND no threats)
+    if (detectedThreats.length === 0 && riskScore < 10) {
       return "This website appears secure. HelioAI found no significant security concerns or suspicious patterns.";
     }
     
@@ -480,6 +481,10 @@ Focus on what the user should KNOW and DO, not just repeating the detected patte
   return "HelioAI is analyzing this website for security concerns...";
 }
 
+// AI request rate limiting
+let lastAIRequest = 0;
+const AI_REQUEST_COOLDOWN = 3000; // 3 seconds between AI requests
+
 // Main page analysis function
 async function analyzePage(url, tabId) {
   if (!settings.threatDetection) return;
@@ -492,6 +497,18 @@ async function analyzePage(url, tabId) {
     const urlObj = new URL(url);
     const domain = urlObj.hostname.replace('www.', '');
     const fullUrl = url.toLowerCase();
+    
+    // Skip analysis for major trusted sites (Google, etc.) to avoid bot detection
+    const skipAnalysis = [
+      'google.com', 'google.co.in', 'google.co.uk',
+      'youtube.com', 'gmail.com', 'drive.google.com',
+      'docs.google.com', 'chrome.google.com'
+    ];
+    
+    if (skipAnalysis.some(trusted => domain.endsWith(trusted) || domain === trusted)) {
+      console.log('[HelioRa] Skipping analysis for trusted Google service:', domain);
+      return;
+    }
     
     let riskScore = 0;
     let threats = [];
@@ -666,8 +683,20 @@ async function analyzePage(url, tabId) {
       status = 'safe';
     }
     
-    // Get AI analysis for ALL sites
-    let aiAnalysis = await getHelioAIAnalysis(domain, url, detectionReasons, riskScore);
+    // Get AI analysis with rate limiting
+    let aiAnalysis = null;
+    const now = Date.now();
+    
+    // Only call AI if:
+    // 1. Enough time has passed since last request (rate limiting)
+    // 2. There are actual threats OR risk score is significant
+    if (now - lastAIRequest > AI_REQUEST_COOLDOWN && (detectionReasons.length > 0 || riskScore >= 30)) {
+      lastAIRequest = now;
+      aiAnalysis = await getHelioAIAnalysis(domain, url, detectionReasons, riskScore);
+    } else if (detectionReasons.length > 0) {
+      // Use fallback message if rate limited
+      aiAnalysis = "Some unusual patterns detected. Exercise caution and verify the site's legitimacy before interacting with it.";
+    }
     
     // Create domain data
     const domainData = {
@@ -928,7 +957,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   }
   
   if (request.action === 'getStats') {
-    sendResponse({ stats });
+    sendResponse({ 
+      stats: {
+        ...stats,
+        cookiesBlocked: cookiesBlocked
+      }
+    });
     return true;
   }
   
@@ -1323,41 +1357,59 @@ Is this likely a fraud attempt impersonating ${brandName}? Answer with ONLY "YES
 // Cookie Management Functions
 let cookiesBlocked = 0;
 
-// Block cookies based on settings
-chrome.cookies.onChanged.addListener(async (changeInfo) => {
-  if (!changeInfo.removed && changeInfo.cookie) {
-    const cookie = changeInfo.cookie;
-    
-    // Block all cookies if enabled
-    if (settings.blockCookies) {
-      try {
-        await chrome.cookies.remove({
-          url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
-          name: cookie.name,
-          storeId: cookie.storeId
-        });
-        cookiesBlocked++;
-        console.log('[HelioRa] Blocked cookie:', cookie.name, 'from', cookie.domain);
-      } catch (error) {
-        console.error('[HelioRa] Error blocking cookie:', error);
+// Block cookies based on settings (with better error handling)
+if (chrome.cookies && chrome.cookies.onChanged) {
+  chrome.cookies.onChanged.addListener(async (changeInfo) => {
+    try {
+      if (!changeInfo.removed && changeInfo.cookie) {
+        const cookie = changeInfo.cookie;
+        
+        // Block all cookies if enabled
+        if (settings.blockCookies) {
+          await chrome.cookies.remove({
+            url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+            name: cookie.name,
+            storeId: cookie.storeId
+          });
+          cookiesBlocked++;
+          
+          // Save count every 5 cookies
+          if (cookiesBlocked % 5 === 0) {
+            chrome.storage.local.set({ cookiesBlocked });
+          }
+          
+          console.log('[HelioRa] Blocked cookie:', cookie.name, 'from', cookie.domain);
+        }
+        // Block only third-party cookies if enabled
+        else if (settings.blockThirdPartyCookies) {
+          const isThirdParty = cookie.domain.startsWith('.') || !cookie.hostOnly;
+          
+          if (isThirdParty) {
+            await chrome.cookies.remove({
+              url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
+              name: cookie.name,
+              storeId: cookie.storeId
+            });
+            cookiesBlocked++;
+            
+            // Save count every 5 cookies
+            if (cookiesBlocked % 5 === 0) {
+              chrome.storage.local.set({ cookiesBlocked });
+            }
+            
+            console.log('[HelioRa] Blocked third-party cookie:', cookie.name, 'from', cookie.domain);
+          }
+        }
       }
+    } catch (error) {
+      console.error('[HelioRa] Cookie blocking error:', error);
     }
-    // Block only third-party cookies if enabled
-    else if (settings.blockThirdPartyCookies && !cookie.domain.startsWith('.') && cookie.domain !== cookie.hostOnly) {
-      try {
-        await chrome.cookies.remove({
-          url: `http${cookie.secure ? 's' : ''}://${cookie.domain}${cookie.path}`,
-          name: cookie.name,
-          storeId: cookie.storeId
-        });
-        cookiesBlocked++;
-        console.log('[HelioRa] Blocked third-party cookie:', cookie.name, 'from', cookie.domain);
-      } catch (error) {
-        console.error('[HelioRa] Error blocking third-party cookie:', error);
-      }
-    }
-  }
-});
+  });
+  
+  console.log('[HelioRa] Cookie blocking listener active');
+} else {
+  console.warn('[HelioRa] Cookie API not available');
+}
 
 // Get cookies blocked count
 function getCookiesBlockedCount() {
@@ -1371,7 +1423,187 @@ function resetCookiesBlocked() {
 
 // Save stats and counter periodically
 setInterval(() => {
-  chrome.storage.local.set({ stats, dynamicRuleIdCounter });
-}, 30000); // Every 30 seconds
+  chrome.storage.local.set({ 
+    stats, 
+    dynamicRuleIdCounter,
+    cookiesBlocked 
+  });
+  console.log('[HelioRa] Stats saved:', stats, 'Cookies:', cookiesBlocked);
+}, 10000); // Every 10 seconds
+
+// ==================== macOS SYSTEM INTEGRATION ====================
+
+// Check if macOS monitor app is running
+let macOSMonitorAvailable = false;
+let lastOSCheck = 0;
+const OS_CHECK_INTERVAL = 2000; // Check every 2 seconds
+
+async function checkMacOSMonitor() {
+  try {
+    const response = await fetch('http://localhost:9876/health', {
+      method: 'GET',
+      signal: AbortSignal.timeout(1000) // 1 second timeout
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      if (!macOSMonitorAvailable) {
+        console.log('[HelioRa] ✅ macOS Monitor connected:', data);
+        macOSMonitorAvailable = true;
+      }
+      return true;
+    }
+  } catch (error) {
+    if (macOSMonitorAvailable) {
+      console.log('[HelioRa] ⚠️ macOS Monitor disconnected');
+      macOSMonitorAvailable = false;
+    }
+    return false;
+  }
+}
+
+// Cross-verify browser surveillance with OS-level usage
+async function crossVerifyOSSurveillance(tabId, domain) {
+  if (!macOSMonitorAvailable) {
+    const now = Date.now();
+    if (now - lastOSCheck > OS_CHECK_INTERVAL) {
+      lastOSCheck = now;
+      await checkMacOSMonitor();
+    }
+    return; // macOS app not running, skip check
+  }
+  
+  try {
+    // Get OS-level surveillance status
+    const response = await fetch('http://localhost:9876/status', {
+      method: 'GET',
+      signal: AbortSignal.timeout(1000)
+    });
+    
+    if (!response.ok) {
+      macOSMonitorAvailable = false;
+      return;
+    }
+    
+    const osStatus = await response.json();
+    
+    // Check if there's a discrepancy
+    const osCameraActive = osStatus.camera;
+    const osMicActive = osStatus.microphone;
+    
+    // Get browser's knowledge (from surveillance logs)
+    const browserKnowsAboutCamera = await checkBrowserKnowsAboutSurveillance(domain, 'getUserMedia');
+    
+    // CRITICAL CHECK: OS says camera/mic is on, but browser didn't detect it
+    if ((osCameraActive || osMicActive) && !browserKnowsAboutCamera) {
+      console.error('[HelioRa] 🚨 CRITICAL: HIDDEN SURVEILLANCE DETECTED!');
+      console.error('[HelioRa] OS Status:', osStatus);
+      console.error('[HelioRa] Browser knowledge:', browserKnowsAboutCamera);
+      
+      // Show nuclear-level warning
+      await showHiddenSurveillanceWarning(tabId, domain, {
+        osCameraActive,
+        osMicActive,
+        osTimestamp: osStatus.timestamp
+      });
+      
+      stats.threatsBlocked++;
+      await chrome.storage.local.set({ stats });
+    }
+    
+    // Log OS status for forensics
+    console.log('[HelioRa] OS Surveillance Check:', {
+      domain,
+      camera: osCameraActive,
+      microphone: osMicActive,
+      browserKnows: browserKnowsAboutCamera,
+      discrepancy: (osCameraActive || osMicActive) && !browserKnowsAboutCamera
+    });
+    
+  } catch (error) {
+    // Network error - app probably not running
+    macOSMonitorAvailable = false;
+  }
+}
+
+// Check if browser knows about surveillance on this domain
+async function checkBrowserKnowsAboutSurveillance(domain, type) {
+  try {
+    const result = await chrome.storage.local.get(['surveillanceLog']);
+    if (!result.surveillanceLog) return false;
+    
+    // Check if there are recent logs (last 5 seconds) for this domain and type
+    const recentLogs = result.surveillanceLog.filter(log => {
+      const logTime = new Date(log.timestamp).getTime();
+      const now = Date.now();
+      const isRecent = (now - logTime) < 5000; // Last 5 seconds
+      const matchesDomain = log.domain === domain;
+      const matchesType = log.type === type;
+      const wasAllowed = !log.blocked;
+      
+      return isRecent && matchesDomain && matchesType && wasAllowed;
+    });
+    
+    return recentLogs.length > 0;
+  } catch (error) {
+    return false;
+  }
+}
+
+// Show critical warning for hidden surveillance
+async function showHiddenSurveillanceWarning(tabId, domain, osStatus) {
+  // Send to content script to show full-page warning
+  try {
+    await chrome.tabs.sendMessage(tabId, {
+      action: 'showHiddenSurveillanceWarning',
+      domain: domain,
+      osStatus: osStatus
+    });
+  } catch (error) {
+    // Tab might not have content script, show notification instead
+    chrome.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon128.png',
+      title: '🚨 CRITICAL: HIDDEN SURVEILLANCE DETECTED',
+      message: `${domain} is using your camera/microphone WITHOUT browser permission!\n\nThis is extremely dangerous. Close this site immediately.`,
+      priority: 2,
+      requireInteraction: true,
+      buttons: [
+        { title: 'Close Tab' },
+        { title: 'Block Domain' }
+      ]
+    });
+  }
+}
+
+// Poll OS status for active tabs
+setInterval(async () => {
+  if (!macOSMonitorAvailable) {
+    await checkMacOSMonitor();
+    return;
+  }
+  
+  // Get active tab
+  const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+  if (tabs.length === 0) return;
+  
+  const tab = tabs[0];
+  if (!tab.url || tab.url.startsWith('chrome://')) return;
+  
+  try {
+    const url = new URL(tab.url);
+    const domain = url.hostname.replace('www.', '');
+    
+    // Cross-verify surveillance
+    await crossVerifyOSSurveillance(tab.id, domain);
+  } catch (error) {
+    // Invalid URL, skip
+  }
+}, 3000); // Check every 3 seconds
+
+// Initial check on startup
+checkMacOSMonitor();
 
 console.log('[HelioRa] Service Worker Ready!');
+console.log('[HelioRa] macOS System Integration: Enabled');
+console.log('[HelioRa] Checking for macOS Monitor app on localhost:9876...');

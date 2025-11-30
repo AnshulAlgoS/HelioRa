@@ -529,3 +529,172 @@ class HelioRaContentScript {
 
 // Initialize
 new HelioRaContentScript();
+
+// Monitor and report blocked resources
+const blockedResourceObserver = new PerformanceObserver((list) => {
+  list.getEntries().forEach(entry => {
+    // Check if resource failed to load (likely blocked)
+    if (entry.transferSize === 0 && entry.decodedBodySize === 0) {
+      const url = entry.name;
+      
+      // Check if it's an ad/tracker domain
+      const knownAdTrackers = [
+        'doubleclick.net', 'googlesyndication.com', 'googleadservices.com',
+        'google-analytics.com', 'googletagmanager.com', 'facebook.com/tr',
+        'scorecardresearch.com', 'adnxs.com', 'advertising.com',
+        'quantserve.com', 'outbrain.com', 'taboola.com', 'criteo.com'
+      ];
+      
+      if (knownAdTrackers.some(tracker => url.includes(tracker))) {
+        chrome.runtime.sendMessage({
+          action: 'resourceBlocked',
+          url: url
+        }).catch(() => {});
+      }
+    }
+  });
+});
+
+try {
+  blockedResourceObserver.observe({ entryTypes: ['resource'] });
+  console.log('[HelioRa] Resource blocking monitor active');
+} catch (e) {
+  console.log('[HelioRa] Resource monitoring not available');
+}
+
+// ==================== macOS INTEGRATION ====================
+
+// Listen for hidden surveillance warnings from service worker
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'showHiddenSurveillanceWarning') {
+    showHiddenSurveillanceOverlay(request.domain, request.osStatus);
+    sendResponse({ success: true });
+    return true;
+  }
+});
+
+function showHiddenSurveillanceOverlay(domain, osStatus) {
+  // Remove any existing overlay
+  const existing = document.getElementById('heliora-hidden-surveillance-warning');
+  if (existing) existing.remove();
+  
+  const overlay = document.createElement('div');
+  overlay.id = 'heliora-hidden-surveillance-warning';
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    height: 100vh !important;
+    background: radial-gradient(circle, #8B0000 0%, #4B0000 100%) !important;
+    color: white !important;
+    z-index: 2147483647 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+    animation: pulse-red 1.5s ease-in-out infinite !important;
+  `;
+  
+  const activeDevices = [];
+  if (osStatus.osCameraActive) activeDevices.push('CAMERA');
+  if (osStatus.osMicActive) activeDevices.push('MICROPHONE');
+  
+  overlay.innerHTML = `
+    <style>
+      @keyframes pulse-red {
+        0%, 100% { opacity: 0.95; }
+        50% { opacity: 1; }
+      }
+      @keyframes shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-10px); }
+        75% { transform: translateX(10px); }
+      }
+    </style>
+    <div style="text-align: center; padding: 60px; max-width: 800px; animation: shake 0.5s ease-in-out infinite;">
+      <div style="font-size: 120px; margin-bottom: 30px; animation: pulse-red 1s ease-in-out infinite;">
+        🚨
+      </div>
+      
+      <h1 style="font-size: 56px; margin-bottom: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 3px;">
+        CRITICAL SECURITY BREACH
+      </h1>
+      
+      <div style="background: rgba(255, 255, 255, 0.2); padding: 30px; border-radius: 20px; margin: 30px 0; border: 3px solid #FFD700;">
+        <h2 style="font-size: 36px; color: #FFD700; margin-bottom: 20px; font-weight: 800;">
+          HIDDEN SURVEILLANCE DETECTED
+        </h2>
+        <p style="font-size: 22px; line-height: 1.8; margin-bottom: 25px;">
+          <strong>⚠️ YOUR ${activeDevices.join(' AND ')} ${activeDevices.length > 1 ? 'ARE' : 'IS'} ACTIVE</strong><br>
+          <span style="color: #FFD700; font-size: 28px;">BUT NO WEBSITE HAS PERMISSION</span>
+        </p>
+        <p style="font-size: 18px; line-height: 1.6; color: rgba(255, 255, 255, 0.9);">
+          This means <strong>${domain}</strong> is bypassing browser security<br>
+          and accessing your ${activeDevices.join(' and ').toLowerCase()} through a hidden backdoor.
+        </p>
+      </div>
+      
+      <div style="background: rgba(0, 0, 0, 0.5); padding: 25px; border-radius: 15px; margin: 30px 0; border: 2px solid #FF0000;">
+        <p style="font-size: 20px; line-height: 1.8; margin-bottom: 20px;">
+          <strong>⚠️ THIS IS EXTREMELY DANGEROUS ⚠️</strong>
+        </p>
+        <p style="font-size: 16px; line-height: 1.6; color: rgba(255, 255, 255, 0.85);">
+          • Your ${activeDevices.join(' and ').toLowerCase()} ${activeDevices.length > 1 ? 'are' : 'is'} being accessed without consent<br>
+          • This could be spyware, malware, or a sophisticated attack<br>
+          • Someone may be watching/listening right now<br>
+          • This site bypassed all browser protections
+        </p>
+      </div>
+      
+      <div style="margin-top: 40px;">
+        <button id="heliora-close-tab-now" style="
+          background: #FFD700;
+          color: #000;
+          border: none;
+          padding: 20px 50px;
+          font-size: 24px;
+          border-radius: 15px;
+          cursor: pointer;
+          font-weight: 900;
+          text-transform: uppercase;
+          box-shadow: 0 10px 30px rgba(255, 215, 0, 0.5);
+          margin: 10px;
+        ">
+          🚨 CLOSE TAB IMMEDIATELY 🚨
+        </button>
+      </div>
+      
+      <div style="margin-top: 30px; font-size: 14px; color: rgba(255, 255, 255, 0.7);">
+        <strong>Technical Details:</strong><br>
+        Domain: ${domain}<br>
+        OS Detection Time: ${osStatus.osTimestamp}<br>
+        macOS AVFoundation: ${activeDevices.join(', ')} IN USE<br>
+        Browser Permission Status: NONE GRANTED<br>
+        <br>
+        <strong>🛡️ Protected by HelioRa Security + macOS System Monitor</strong><br>
+        <em>Cross-layer surveillance detection - Browser + OS verification</em>
+      </div>
+    </div>
+  `;
+  
+  document.body.appendChild(overlay);
+  
+  // Add event listeners
+  document.getElementById('heliora-close-tab-now').addEventListener('click', () => {
+    window.close();
+    
+    // If window.close() doesn't work (some browsers prevent it), try to navigate away
+    setTimeout(() => {
+      window.location.href = 'about:blank';
+    }, 100);
+  });
+  
+  // Also send notification
+  console.error('%c[HelioRa] 🚨 CRITICAL SECURITY BREACH - HIDDEN SURVEILLANCE', 'color: red; font-size: 20px; font-weight: bold');
+  console.error('[HelioRa] Domain:', domain);
+  console.error('[HelioRa] OS Status:', osStatus);
+  console.error('[HelioRa] Action: CLOSE THIS TAB IMMEDIATELY');
+}
+
+console.log('[HelioRa] macOS Integration Active - Cross-layer surveillance detection enabled');

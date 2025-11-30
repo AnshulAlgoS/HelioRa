@@ -1,21 +1,20 @@
 {
   "manifest_version": 3,
   "name": "HelioRa Security",
-  "version": "4.0.0",
-  "description": "Browser security platform with threat detection and ad blocking",
+  "version": "5.0.0",
+  "description": "Advanced browser security platform with surveillance detection, threat analysis, and real-time protection",
   "author": "Anshul Saxena",
   "permissions": [
     "declarativeNetRequest",
-    "declarativeNetRequestWithHostAccess",
-    "declarativeNetRequestFeedback",
     "storage",
-    "tabs",
     "activeTab",
     "scripting",
     "notifications",
-    "webRequest",
     "webNavigation",
     "cookies"
+  ],
+  "optional_permissions": [
+    "tabs"
   ],
   "host_permissions": [
     "<all_urls>"
