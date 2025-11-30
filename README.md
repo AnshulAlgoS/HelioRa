@@ -1,7 +1,7 @@
 # HelioRa Security
 
 > Advanced browser defense system with real-time surveillance protection and AI-powered threat
-analysis
+> analysis
 
 [![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/AnshulAlgoS/HelioRa)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
@@ -17,11 +17,19 @@ time—without relying on user awareness alone.
 
 ### 🛡️ Real-Time Surveillance Protection
 
-- **CamPhish Defense**: Blocks camera, microphone, and GPS access on untrusted domains
-- **Tunnel Detection**: Identifies temporary hosting (ngrok, CloudFlare Tunnel, etc.)
+- **Camera & Microphone Blocking**: Intercepts `getUserMedia()` before malicious scripts execute
+- **Screen Capture Defense**: Blocks `getDisplayMedia()` on untrusted domains
+- **WebRTC IP Leak Protection**: Prevents hidden `RTCPeerConnection` usage and STUN server
+  exploitation
+- **Clipboard Theft Prevention**: Blocks `navigator.clipboard.readText()` and paste traps on
+  sensitive forms
+- **Form Exfiltration Detection**: Monitors `XMLHttpRequest`/`fetch` for credential theft to
+  third-party domains
+- **GPS Location Blocking**: Intercepts geolocation API on suspicious sites
+- **Tunnel Detection**: Identifies temporary hosting (ngrok, CloudFlare Tunnel, serveo, etc.)
 - **Fake Page Recognition**: Detects festival wishes, fake YouTube Live, and meeting templates
 - **Permission Profiling**: Flags dangerous combinations (camera + GPS + fullscreen + notifications)
-- **Privacy Lockdown**: One-click global disable of all camera/mic/GPS access
+- **Privacy Lockdown**: One-click global disable of all surveillance APIs across entire browser
 
 ### 🤖 AI-Powered Security Analysis
 
@@ -58,38 +66,80 @@ time—without relying on user awareness alone.
 - **IP Address Blocking**: Flags suspicious numeric domains
 - **Professional Warning Pages**: Modern block screens with threat details
 
-### 📊 Security Dashboard
+### 📊 Professional Security Dashboard
 
 - **Risk Scoring**: 0-100 threat assessment for every site
 - **Event Timeline**: Chronological security events log
-- **Forensic Logging**: Complete surveillance attempt history
-- **Export Reports**: JSON export for law enforcement/analysis
+- **Forensic Logging**: Structured surveillance logs with ISO timestamps, risk scores, and action
+  tracking
+- **Export Reports**: JSON, CSV, and formatted text reports for law enforcement/security audits
+- **Privacy Mode**: Anonymized logging (removes URL paths/query params)
+- **Local-Only Storage**: Zero cloud sync - all data stays on your device
+- **Session Tracking**: Unique session IDs for correlation analysis
+- **Statistics Dashboard**: Real-time metrics on blocks, allows, and threat distribution
 
-## 🚀 Unique Selling Points
+## 🚀 Architecture & Design
 
-### 1. **Surveillance-First Design**
+### Comprehensive Surveillance Coverage
 
-Unlike traditional ad blockers, HelioRa focuses on preventing real-time surveillance attacks like
-CamPhish that steal camera/GPS data.
+HelioRa protects against 9 distinct surveillance vectors:
 
-### 2. **Page Context Injection**
+- ✅ getUserMedia (camera/microphone)
+- ✅ getDisplayMedia (screen capture)
+- ✅ RTCPeerConnection (WebRTC IP leaks)
+- ✅ navigator.clipboard.readText()
+- ✅ Paste traps on login/payment forms
+- ✅ Form exfiltration to third-party domains
+- ✅ Geolocation tracking
+- ✅ Notification spam
+- ✅ Hidden iframe detection
 
-Runs protection code in the page's actual JavaScript context to override native APIs before
-malicious scripts execute.
+### Minimal Permission Footprint
 
-### 3. **Behavioral Analysis**
+The extension uses only essential permissions:
 
-Detects not just bad domains, but bad intentions—analyzing what a page is trying to do (harvest
-credentials, access camera, etc.).
+- **5 core permissions** - All required for core functionality
+- **3 optional permissions** - User-activated features only
+- **No telemetry** - Zero analytics, tracking, or cloud sync
+- **Fully documented** - See `PERMISSIONS.md` for detailed justification
 
-### 4. **Forensic Evidence**
+### Professional Forensic Logging
 
-Logs all surveillance attempts with timestamps, permission types, and redirect chains for
-investigation.
+Structured logging system with:
 
-### 5. **Zero User Interaction**
+- ISO 8601 timestamps and unique session IDs
+- Risk scoring (0-100) for each surveillance attempt
+- Privacy modes (standard vs. anonymized)
+- Export formats: JSON, CSV, formatted text reports
+- See `LOG_SCHEMA.md` for complete specification
 
-Protection is automatic and always-on. Users don't need to understand threats to be protected.
+### Page Context Injection
+
+Runs in the page's JavaScript context (MAIN world) to:
+
+- Override surveillance APIs before malicious scripts load
+- Use `document_start` timing for earliest protection
+- Self-remove after injection to minimize footprint
+- Provide reliable API blocking that content scripts cannot achieve
+
+### macOS System Integration
+
+Cross-layer verification with native macOS app:
+
+- Monitor system-level camera/microphone usage via AVFoundation
+- Detect discrepancies between browser and OS surveillance state
+- HTTP API on localhost for real-time status checks
+- Alert on hidden surveillance attempts bypassing browser security
+- See `macos-monitor/README.md` for setup instructions
+
+### AI-Powered Threat Analysis
+
+Context-aware security assessment:
+
+- NVIDIA-powered threat intelligence (optional)
+- Distinguishes legitimate security tools from actual threats
+- Fallback analysis when offline
+- Anonymous requests with no user tracking
 
 ## 📦 Installation
 
@@ -158,23 +208,29 @@ bash camphish.sh
 
 ```
 HelioRa/
-├── manifest.json                  # Extension configuration
-├── service_worker.js              # Background security engine (1050+ lines)
-├── surveillance_protection.js     # Camera/GPS/mic blocking (page context)
-├── surveillance_injector.js       # Protection script injector
-├── content_script.js              # Behavior detection & monitoring
-├── fraud_detector.js              # Fraud pattern detection
-├── cookie_blocker.js              # Cookie banner remover
-├── popup.html                     # Extension dashboard UI
-├── popup.js                       # Dashboard logic
-├── popup.css                      # Modern UI styling
-├── warning.html                   # Phishing warning page
-├── rules.json                     # Ad blocking rules
+├── manifest.json                  # Extension config (strict permissions, no bloat)
+├── service_worker.js              # Background security engine (1377 lines)
+├── surveillance_protection.js     # API override system (761 lines, main world context)
+├── surveillance_logger.js         # Forensic logging system (444 lines)
+├── surveillance_injector.js       # Protection script injector (26 lines)
+├── surveillance_blocker.js        # Real-time defense (490 lines)
+├── content_script.js              # Behavior detection & monitoring (531 lines)
+├── fraud_detector.js              # Fraud pattern detection (599 lines)
+├── cookie_blocker.js              # Cookie banner remover (346 lines)
+├── popup.html                     # Extension dashboard UI (289 lines)
+├── popup.js                       # Dashboard logic (658 lines)
+├── popup.css                      # Modern UI styling (924 lines)
+├── warning.html                   # Phishing warning page (298 lines)
+├── rules.json                     # Ad blocking rules (151 lines)
+├── PERMISSIONS.md                 # Every permission justified (NEW!)
+├── LOG_SCHEMA.md                  # Forensic logging specification (NEW!)
 ├── icons/                         # Extension icons
 │   ├── icon16.png
 │   ├── icon48.png
 │   └── icon128.png
 └── README.md                      # This file
+
+Total: 6,906+ lines of production code
 ```
 
 ## 🎨 Dashboard Overview
