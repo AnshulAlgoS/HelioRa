@@ -23,10 +23,7 @@ const hideCSS = `
 [id*="Cookie"],
 [class*="cookie"],
 [class*="Cookie"],
-[class*="consent"],
-[class*="Consent"],
-[class*="gdpr"],
-[class*="GDPR"],
+  
 .fc-consent-root,
 #qc-cmp2-container,
 .qc-cmp2-container,
@@ -62,12 +59,8 @@ div[class*="sp-cc"],
   pointer-events: none !important;
 }
 
-/* Overlays and backdrops */
-.modal-backdrop,
-.cookie-overlay,
-[class*="overlay"],
-div[style*="position: fixed"][style*="background"],
-div[style*="position: fixed"][style*="z-index"] {
+/* Cookie-specific overlays (do not target generic overlays/backdrops) */
+.cookie-overlay {
   opacity: 0 !important;
   pointer-events: none !important;
   display: none !important;
@@ -246,19 +239,7 @@ function nukeCookieBanners() {
     }
   });
 
-  // Remove overlays
-  document.querySelectorAll(`
-  .modal-backdrop,
-  [class*="overlay"],
-  [class*="backdrop"],
-  [class*="consent"],
-  [id*="consent"],
-  [id*="gdpr"],
-  [class*="gdpr"]
-`).forEach(el => {
-    el.remove();
-    removed++;
-  });
+  // Do NOT remove generic overlays/backdrops here to avoid breaking UIs
 
 
   // Re-enable scrolling
@@ -413,7 +394,6 @@ function scanIframes() {
 
       doc.querySelectorAll(`
         [id*="cookie"], [class*="cookie"],
-        [id*="consent"], [class*="consent"],
         [aria-label*="cookie" i]
       `).forEach(el => el.remove());
     } catch (e) {
@@ -428,7 +408,6 @@ function scanShadowDOM(root = document) {
       try {
         el.shadowRoot.querySelectorAll(`
           [id*="cookie"], [class*="cookie"],
-          [id*="consent"], [class*="consent"],
           [aria-label*="cookie" i]
         `).forEach(node => node.remove());
 
@@ -452,8 +431,7 @@ function visionConsentNuke() {
 
       if (
         (t.includes("cookie") && t.includes("use")) ||
-        c.includes("cookie") ||
-        c.includes("consent")
+        c.includes("cookie")
       ) {
         el.remove();
         document.body.style.overflow = "auto";

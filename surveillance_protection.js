@@ -7,7 +7,6 @@
   
   console.log('%c[HelioRa] Advanced Surveillance Protection Active', 'color: #4CAF50; font-weight: bold; font-size: 14px');
   
-  // ==================== CONFIGURATION ====================
   
   const domain = window.location.hostname;
   const url = window.location.href.toLowerCase();
@@ -25,7 +24,8 @@
     'trycloudflare.com', '.trycloudflare.com',
     'serveo.net', 'localhost.run', 'tunnelto.dev',
     'localtunnel.me', 'pagekite.me', 'tunnel.pyjam.as',
-    'cloudflare.app', 'ngrok.com'
+    'cloudflare.app', 'ngrok.com',
+    'localhost', '127.0.0.1', '0.0.0.0'
   ];
   
   // Suspicious page patterns
@@ -39,7 +39,8 @@
   const isTrusted = TRUSTED_DOMAINS.some(trusted => domain.includes(trusted));
   
   // Check if domain uses tunnel hosting
-  const isTunnel = TUNNEL_PATTERNS.some(pattern => 
+  const isIpHost = /^\d{1,3}(\.\d{1,3}){3}$/.test(domain);
+  const isTunnel = isIpHost || TUNNEL_PATTERNS.some(pattern => 
     domain.includes(pattern) || domain.endsWith(pattern)
   );
   
@@ -49,7 +50,7 @@
   );
   
   // Determine if we should block surveillance APIs
-  const SHOULD_BLOCK = (isTunnel || isSuspicious) && !isTrusted;
+  const SHOULD_BLOCK = isTunnel || ((isSuspicious) && !isTrusted);
   
   // Track permission requests for multi-attack detection
   let permissionRequests = new Set();
@@ -117,6 +118,79 @@
       return originalGetUserMedia(constraints);
     };
   }
+
+  // Block final camera stream attachment even if site captured old getUserMedia reference
+  if (window.HTMLMediaElement) {
+    const desc = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, 'srcObject');
+    if (desc && desc.set) {
+      Object.defineProperty(HTMLMediaElement.prototype, 'srcObject', {
+        configurable: true,
+        enumerable: desc.enumerable,
+        get: desc.get,
+        set(value) {
+          const isMediaStream = typeof MediaStream !== 'undefined' && value instanceof MediaStream;
+          if (SHOULD_BLOCK && isMediaStream) {
+            logAttempt('media.srcObject', true, { kind: 'MediaStream' });
+            showWarning('CAMERA');
+            throw new DOMException('Media attachment blocked by HelioRa Security', 'NotAllowedError');
+          }
+          return desc.set.call(this, value);
+        }
+      });
+    }
+  }
+
+  // Reduce device enumeration on tunnels/local hosts
+  if (navigator.mediaDevices?.enumerateDevices) {
+    const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
+    navigator.mediaDevices.enumerateDevices = function() {
+      if (SHOULD_BLOCK) {
+        logAttempt('enumerateDevices', true);
+        return Promise.resolve([]);
+      }
+      return originalEnumerateDevices();
+    };
+  }
+
+  if (navigator.getUserMedia) {
+    const originalLegacyGetUserMedia = navigator.getUserMedia.bind(navigator);
+    navigator.getUserMedia = function(constraints, successCb, errorCb) {
+      console.log('[HelioRa] 📹 legacy getUserMedia() called', constraints);
+      const hasVideo = constraints?.video;
+      const hasAudio = constraints?.audio;
+      if (SHOULD_BLOCK) {
+        logAttempt('getUserMedia(legacy)', true, { constraints, hasVideo, hasAudio });
+        showWarning(hasVideo && hasAudio ? 'CAMERA & MICROPHONE' : hasVideo ? 'CAMERA' : 'MICROPHONE');
+        if (typeof errorCb === 'function') {
+          errorCb({ code: 1, name: 'NotAllowedError', message: 'Permission denied by HelioRa Security' });
+        }
+        return;
+      }
+      logAttempt('getUserMedia(legacy)', false, { constraints, hasVideo, hasAudio });
+      return originalLegacyGetUserMedia(constraints, successCb, errorCb);
+    };
+  }
+
+  ['webkitGetUserMedia','mozGetUserMedia'].forEach(fn => {
+    if (navigator[fn]) {
+      const originalPrefixed = navigator[fn].bind(navigator);
+      navigator[fn] = function(constraints, successCb, errorCb) {
+        console.log(`[HelioRa] 📹 ${fn}() called`, constraints);
+        const hasVideo = constraints?.video;
+        const hasAudio = constraints?.audio;
+        if (SHOULD_BLOCK) {
+          logAttempt(`${fn}`, true, { constraints, hasVideo, hasAudio });
+          showWarning(hasVideo && hasAudio ? 'CAMERA & MICROPHONE' : hasVideo ? 'CAMERA' : 'MICROPHONE');
+          if (typeof errorCb === 'function') {
+            errorCb({ code: 1, name: 'NotAllowedError', message: 'Permission denied by HelioRa Security' });
+          }
+          return;
+        }
+        logAttempt(`${fn}`, false, { constraints, hasVideo, hasAudio });
+        return originalPrefixed(constraints, successCb, errorCb);
+      };
+    }
+  });
   
   // ==================== 2. SCREEN CAPTURE PROTECTION ====================
   

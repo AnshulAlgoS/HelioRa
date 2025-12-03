@@ -21,7 +21,8 @@ const ATTACK_PATTERNS = {
     'trycloudflare.com', '*.trycloudflare.com',
     'serveo.net', 'pagekite.me', 'tunnelto.dev',
     'localtunnel.me', 'tunnel.pyjam.as',
-    'thingproxy.freeboard.io', 'burpcollaborator.net'
+    'thingproxy.freeboard.io', 'burpcollaborator.net',
+    'localhost', '127.0.0.1', '0.0.0.0'
   ],
 
   // Suspicious URL patterns 
