@@ -7,15 +7,15 @@ const permissionLog = [];
 
 // Detect CamPhish-style attack patterns
 const ATTACK_PATTERNS = {
-  // Fake page templates used by CamPhish
+  // Fake phishing & scam live page patterns 
   fakeLivePages: [
     'festival', 'wish', 'greeting', 'celebration',
     'youtube.*live', 'live.*stream', 'watch.*live',
-    'meeting', 'zoom', 'webinar', 'conference',
-    'video.*call', 'chat.*room'
+    'free.*gift', 'gift.*claim', 'reward.*claim',
+    'verify.*account', 'secure.*account'
   ],
-  
-  // Tunnel hosting services (ngrok, cloudflare tunnel, serveo, etc.)
+
+  // Tunnel hosting services
   tunnelDomains: [
     'ngrok.io', 'ngrok-free.app', 'loca.lt', 'localhost.run',
     'trycloudflare.com', '*.trycloudflare.com',
@@ -23,21 +23,21 @@ const ATTACK_PATTERNS = {
     'localtunnel.me', 'tunnel.pyjam.as',
     'thingproxy.freeboard.io', 'burpcollaborator.net'
   ],
-  
-  // Suspicious URL patterns
+
+  // Suspicious URL patterns 
   suspiciousPatterns: [
-    /camera|webcam|cam-/i,
-    /photo|selfie|picture/i,
-    /live.*meeting|meeting.*live/i,
+    /camera.*access|access.*camera/i,
+    /enable.*webcam|webcam.*enable/i,
+    /take.*photo|capture.*photo/i,
     /verify.*identity|identity.*verify/i,
-    /security.*check|check.*security/i,
-    /enable.*camera|camera.*enable/i,
-    /grant.*access|access.*grant/i
+    /secure.*login|login.*secure/i,
+    /grant.*permission|permission.*grant/i
   ],
-  
-  // Dangerous permission combinations (surveillance attack signature)
+
+  // Truly dangerous permission combination
   dangerousCombo: ['camera', 'geolocation', 'notifications', 'fullscreen']
 };
+
 
 // Global privacy lockdown state
 let privacyLockdown = false;
@@ -70,7 +70,7 @@ function isFakeLivePage() {
   const url = window.location.href.toLowerCase();
   const title = document.title.toLowerCase();
   const bodyText = document.body.innerText.toLowerCase();
-  
+
   return ATTACK_PATTERNS.fakeLivePages.some(pattern => {
     const regex = new RegExp(pattern, 'i');
     return regex.test(url) || regex.test(title) || regex.test(bodyText);
@@ -87,7 +87,7 @@ function hasSuspiciousPattern() {
 function detectRedirectChain() {
   const referrer = document.referrer;
   const currentUrl = window.location.href;
-  
+
   if (referrer && new URL(referrer).hostname !== window.location.hostname) {
     console.log('[HelioRa Surveillance] Redirect detected:', referrer, '->', currentUrl);
     return true;
@@ -99,55 +99,57 @@ function detectRedirectChain() {
 function calculateThreatScore() {
   let score = 0;
   const domain = window.location.hostname;
-  
+
   // Tunnel domain = HIGH RISK
   if (isTunnelDomain(domain)) {
     score += 70;
     console.log('[HelioRa Surveillance] THREAT: Tunnel domain detected');
   }
-  
+
   // Fake live page = HIGH RISK
   if (isFakeLivePage()) {
     score += 60;
     console.log('[HelioRa Surveillance] THREAT: Fake live page pattern detected');
   }
-  
+
   // Suspicious URL pattern
   if (hasSuspiciousPattern()) {
     score += 40;
     console.log('[HelioRa Surveillance] THREAT: Suspicious URL pattern');
   }
-  
+
   // Redirect chain = MEDIUM RISK
   if (detectRedirectChain()) {
     score += 30;
     console.log('[HelioRa Surveillance] THREAT: Redirect chain detected');
   }
-  
+
   // New/unknown domain (not in history)
-  const domainAge = sessionStorage.getItem('domain_first_visit_' + domain);
-  if (!domainAge) {
-    score += 20;
-    sessionStorage.setItem('domain_first_visit_' + domain, Date.now());
-    console.log('[HelioRa Surveillance] THREAT: New/unknown domain');
-  }
-  
+const domainAge = sessionStorage.getItem('domain_first_visit_' + domain);
+
+if (!domainAge && isTunnelDomain(domain)) {
+  score += 20;
+  sessionStorage.setItem('domain_first_visit_' + domain, Date.now());
+  console.log('[HelioRa Surveillance] THREAT: New tunnel domain detected');
+}
+
+
   return Math.min(score, 100);
 }
 
 // Override navigator.mediaDevices.getUserMedia (camera/mic access)
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
-  
-  navigator.mediaDevices.getUserMedia = async function(constraints) {
+
+  navigator.mediaDevices.getUserMedia = async function (constraints) {
     const domain = window.location.hostname;
     const timestamp = new Date().toISOString();
     const threatScore = calculateThreatScore();
-    
+
     console.log('[HelioRa Surveillance] Camera/Mic access requested by:', domain);
     console.log('[HelioRa Surveillance] Constraints:', constraints);
     console.log('[HelioRa Surveillance] Threat Score:', threatScore);
-    
+
     // Log for forensics
     const logEntry = {
       type: 'getUserMedia',
@@ -159,11 +161,11 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       referrer: document.referrer,
       blocked: false
     };
-    
+
     // Check if should block
     let shouldBlock = false;
     let blockReason = '';
-    
+
     // Privacy lockdown mode - block everything
     if (privacyLockdown) {
       shouldBlock = true;
@@ -175,39 +177,39 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       blockReason = 'High threat score: ' + threatScore;
     }
     // Untrusted domain
-    else if (!isTrustedDomain(domain)) {
+    else if (!isTrustedDomain(domain) && threatScore >= 60) {
       shouldBlock = true;
-      blockReason = 'Untrusted domain';
+      blockReason = 'Untrusted + High Threat';
     }
-    
+
     if (shouldBlock) {
       logEntry.blocked = true;
       logEntry.blockReason = blockReason;
       permissionLog.push(logEntry);
-      
+
       // Send to background for logging
       chrome.runtime.sendMessage({
         action: 'logSurveillanceAttempt',
         data: logEntry
       });
-      
+
       // Show warning
       showSurveillanceWarning(constraints, blockReason, threatScore);
-      
+
       // Throw error to block access
       throw new DOMException('Permission denied by HelioRa Security', 'NotAllowedError');
     }
-    
+
     // Allow but log
     logEntry.blocked = false;
     logEntry.blockReason = 'Trusted domain';
     permissionLog.push(logEntry);
-    
+
     chrome.runtime.sendMessage({
       action: 'logSurveillanceAttempt',
       data: logEntry
     });
-    
+
     return originalGetUserMedia(constraints);
   };
 }
@@ -216,15 +218,15 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
 if (navigator.geolocation) {
   const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
   const originalWatchPosition = navigator.geolocation.watchPosition.bind(navigator.geolocation);
-  
-  navigator.geolocation.getCurrentPosition = function(success, error, options) {
+
+  navigator.geolocation.getCurrentPosition = function (success, error, options) {
     const domain = window.location.hostname;
     const timestamp = new Date().toISOString();
     const threatScore = calculateThreatScore();
-    
+
     console.log('[HelioRa Surveillance] GPS location requested by:', domain);
     console.log('[HelioRa Surveillance] Threat Score:', threatScore);
-    
+
     const logEntry = {
       type: 'geolocation',
       domain: domain,
@@ -234,10 +236,10 @@ if (navigator.geolocation) {
       referrer: document.referrer,
       blocked: false
     };
-    
+
     let shouldBlock = false;
     let blockReason = '';
-    
+
     if (privacyLockdown) {
       shouldBlock = true;
       blockReason = 'Privacy lockdown mode enabled';
@@ -248,37 +250,37 @@ if (navigator.geolocation) {
       shouldBlock = true;
       blockReason = 'Untrusted domain';
     }
-    
+
     if (shouldBlock) {
       logEntry.blocked = true;
       logEntry.blockReason = blockReason;
       permissionLog.push(logEntry);
-      
+
       chrome.runtime.sendMessage({
         action: 'logSurveillanceAttempt',
         data: logEntry
       });
-      
+
       showSurveillanceWarning({ geolocation: true }, blockReason, threatScore);
-      
+
       if (error) {
         error({ code: 1, message: 'User denied Geolocation' });
       }
       return;
     }
-    
+
     logEntry.blocked = false;
     permissionLog.push(logEntry);
-    
+
     chrome.runtime.sendMessage({
       action: 'logSurveillanceAttempt',
       data: logEntry
     });
-    
+
     return originalGetCurrentPosition(success, error, options);
   };
-  
-  navigator.geolocation.watchPosition = function(success, error, options) {
+
+  navigator.geolocation.watchPosition = function (success, error, options) {
     // Same logic as getCurrentPosition
     return navigator.geolocation.getCurrentPosition(success, error, options);
   };
@@ -287,18 +289,18 @@ if (navigator.geolocation) {
 // Override Notification.requestPermission (notification spam)
 if (window.Notification) {
   const originalRequestPermission = Notification.requestPermission.bind(Notification);
-  
-  Notification.requestPermission = async function() {
+
+  Notification.requestPermission = async function () {
     const domain = window.location.hostname;
     const threatScore = calculateThreatScore();
-    
+
     console.log('[HelioRa Surveillance] Notification permission requested by:', domain);
-    
+
     if (privacyLockdown || threatScore >= 60 || !isTrustedDomain(domain)) {
       console.log('[HelioRa Surveillance] BLOCKED notification permission');
       return 'denied';
     }
-    
+
     return originalRequestPermission();
   };
 }
@@ -308,18 +310,18 @@ let requestedPermissions = new Set();
 
 function trackPermissionRequest(type) {
   requestedPermissions.add(type);
-  
+
   // Check if dangerous combo is being requested
-  const hasDangerousCombo = ATTACK_PATTERNS.dangerousCombo.every(perm => 
+  const hasDangerousCombo = ATTACK_PATTERNS.dangerousCombo.every(perm =>
     requestedPermissions.has(perm)
   );
-  
+
   if (hasDangerousCombo) {
     console.error('[HelioRa Surveillance] CRITICAL: Dangerous permission combination detected!');
     console.error('[HelioRa Surveillance] Requested:', Array.from(requestedPermissions));
-    
+
     showCriticalWarning();
-    
+
     chrome.runtime.sendMessage({
       action: 'criticalSurveillanceThreat',
       data: {
@@ -359,9 +361,9 @@ function showSurveillanceWarning(constraints, reason, threatScore) {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     border: 3px solid #ff5252;
   `;
-  
+
   const requestType = constraints.video ? 'CAMERA' : constraints.audio ? 'MICROPHONE' : constraints.geolocation ? 'GPS LOCATION' : 'PERMISSIONS';
-  
+
   warning.innerHTML = `
     <div style="text-align: center;">
       <svg width="60" height="60" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
@@ -405,9 +407,9 @@ function showSurveillanceWarning(constraints, reason, threatScore) {
       ">Close & Go Back</button>
     </div>
   `;
-  
+
   document.body.appendChild(warning);
-  
+
   document.getElementById('heliora-close-warning').addEventListener('click', () => {
     warning.remove();
     window.history.back();
@@ -431,7 +433,7 @@ function showCriticalWarning() {
     justify-content: center;
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   `;
-  
+
   warning.innerHTML = `
     <div style="text-align: center; padding: 40px;">
       <h1 style="font-size: 48px; margin-bottom: 20px; color: #ff5252;">
@@ -458,7 +460,7 @@ function showCriticalWarning() {
       ">CLOSE TAB IMMEDIATELY</button>
     </div>
   `;
-  
+
   document.body.innerHTML = '';
   document.body.appendChild(warning);
 }

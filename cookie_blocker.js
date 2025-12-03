@@ -87,6 +87,34 @@ style.textContent = hideCSS;
 (document.head || document.documentElement).appendChild(style);
 
 console.log('[HelioRa Cookie] CSS injected');
+(function blockConsentAPIs() {
+  const fakeConsent = () => ({ gdprApplies: false, tcString: "FAKE", eventStatus: "tcloaded" });
+
+  try {
+    window.__tcfapi = function (cmd, version, cb) {
+      if (typeof cb === "function") cb(fakeConsent(), true);
+    };
+
+    window.__uspapi = function (cmd, version, cb) {
+      if (typeof cb === "function") cb({}, true);
+    };
+
+    try {
+      Object.defineProperty(window, "OneTrust", { configurable: true, get: () => ({ IsConsentGiven: () => true }) });
+    } catch { }
+
+    try {
+      Object.defineProperty(window, "Didomi", { configurable: true, get: () => ({ getUserConsentStatus: () => true }) });
+    } catch { }
+
+    try {
+      Object.defineProperty(window, "Cookiebot", { configurable: true, get: () => ({ consent: true, hasConsent: () => true }) });
+    } catch { }
+
+    console.log("[HelioRa] Consent APIs neutralized");
+  } catch (e) { }
+})();
+
 
 // STEP 2: Aggressively remove cookie banners
 function nukeCookieBanners() {
@@ -98,22 +126,22 @@ function nukeCookieBanners() {
     '#onetrust-banner-sdk',
     '#onetrust-consent-sdk',
     '#onetrust-pc-sdk',
-    
+
     // CookieBot
     '#CybotCookiebotDialog',
-    
+
     // Quantcast
     '#qc-cmp2-container',
     '.qc-cmp2-container',
-    
+
     // Didomi
     '[id*="didomi"]',
     '[class*="didomi"]',
-    
+
     // TrustArc
     '#truste-consent-track',
     '#teconsent',
-    
+
     // Amazon specific
     'span[data-action="sp-cc"]',
     'form[action*="cookie"]',
@@ -121,7 +149,7 @@ function nukeCookieBanners() {
     '#sp-cc-container',
     '[id*="sp-cc"]',
     '[data-action*="cookie"]',
-    
+
     // Generic patterns
     '.cookie-banner',
     '.cookie-consent',
@@ -137,7 +165,7 @@ function nukeCookieBanners() {
     '.cc-window',
     '.cc-banner',
     '.osano-cm-window',
-    
+
     // Attribute selectors
     '[id*="cookie"]',
     '[id*="Cookie"]',
@@ -148,6 +176,15 @@ function nukeCookieBanners() {
     '[aria-label*="consent" i]',
     '[aria-labelledby*="cookie" i]',
   ];
+  try {
+    localStorage.setItem("consent", "true");
+    localStorage.setItem("cookieConsent", "true");
+    sessionStorage.setItem("consent", "true");
+
+    document.cookie = "consent=true; path=/; max-age=31536000";
+    document.cookie = "cookieConsent=true; path=/; max-age=31536000";
+
+  } catch (e) { }
 
   // Remove by selectors
   selectors.forEach(selector => {
@@ -169,36 +206,36 @@ function nukeCookieBanners() {
       const style = window.getComputedStyle(el);
       const position = style.position;
       const zIndex = parseInt(style.zIndex) || 0;
-      
+
       if (position === 'fixed' || position === 'sticky' || zIndex > 999) {
         const text = el.innerText?.toLowerCase() || '';
         const id = el.id?.toLowerCase() || '';
         const className = el.className?.toString().toLowerCase() || '';
         const ariaLabel = el.getAttribute('aria-label')?.toLowerCase() || '';
-        
+
         const cookieKeywords = [
-          'cookie', 'consent', 'gdpr', 'privacy', 
+          'cookie', 'consent', 'gdpr', 'privacy',
           'we use cookies', 'we use similar tools',
-          'accept', 'decline', 'reject', 
+          'accept', 'decline', 'reject',
           'manage preferences', 'cookie preferences',
           'cookie notice', 'your choice applies',
           'third-party advertising', 'personalized ads'
         ];
-        
-        const hasCookieContent = cookieKeywords.some(keyword => 
-          text.includes(keyword) || 
-          id.includes(keyword) || 
+
+        const hasCookieContent = cookieKeywords.some(keyword =>
+          text.includes(keyword) ||
+          id.includes(keyword) ||
           className.includes(keyword) ||
           ariaLabel.includes(keyword)
         );
-        
+
         // Extra check for Amazon-style long cookie text
         const hasLongCookieText = text.length > 100 && (
-          text.includes('we use cookies') || 
+          text.includes('we use cookies') ||
           text.includes('cookie preferences') ||
           text.includes('advertising cookies')
         );
-        
+
         if (hasCookieContent || hasLongCookieText) {
           el.remove();
           removed++;
@@ -210,10 +247,19 @@ function nukeCookieBanners() {
   });
 
   // Remove overlays
-  document.querySelectorAll('.modal-backdrop, [class*="overlay"]').forEach(el => {
+  document.querySelectorAll(`
+  .modal-backdrop,
+  [class*="overlay"],
+  [class*="backdrop"],
+  [class*="consent"],
+  [id*="consent"],
+  [id*="gdpr"],
+  [class*="gdpr"]
+`).forEach(el => {
     el.remove();
     removed++;
   });
+
 
   // Re-enable scrolling
   document.body.style.overflow = '';
@@ -225,6 +271,17 @@ function nukeCookieBanners() {
 
   return removed;
 }
+(function forceDomainCookies() {
+  try {
+    const host = location.hostname;
+    const parts = host.split(".");
+    if (parts.length >= 2) {
+      const rootDomain = "." + parts.slice(-2).join(".");
+      document.cookie = `consent=true; path=/; domain=${rootDomain}; max-age=31536000`;
+      document.cookie = `cookieConsent=true; path=/; domain=${rootDomain}; max-age=31536000`;
+    }
+  } catch {}
+})();
 
 // STEP 3: Try to click "Reject/Decline" buttons
 function clickDeclineButtons() {
@@ -233,7 +290,7 @@ function clickDeclineButtons() {
     'button:not([class*="accept"]):not([id*="accept"])',
     'a:not([class*="accept"]):not([id*="accept"])',
     'input[type="button"]:not([class*="accept"])',
-    
+
     // Specific platforms
     '#onetrust-reject-all-handler',
     '[id*="reject"]',
@@ -258,19 +315,19 @@ function clickDeclineButtons() {
         const text = btn.innerText?.toLowerCase() || '';
         const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
         const value = btn.value?.toLowerCase() || '';
-        
-        const isDecline = declineKeywords.some(kw => 
+
+        const isDecline = declineKeywords.some(kw =>
           text.includes(kw) || ariaLabel.includes(kw) || value.includes(kw)
         );
-        const isAccept = avoidKeywords.some(kw => 
+        const isAccept = avoidKeywords.some(kw =>
           text.includes(kw) || ariaLabel.includes(kw) || value.includes(kw)
         );
-        
+
         if (isDecline && !isAccept && !clicked) {
           console.log('[HelioRa Cookie] Clicking decline button:', text || ariaLabel || value);
           btn.click();
           clicked = true;
-          
+
           // After clicking, remove the entire parent container
           setTimeout(() => {
             let parent = btn.parentElement;
@@ -296,21 +353,120 @@ function clickDeclineButtons() {
 
 // STEP 4: Main execution
 let scanCount = 0;
-
 function scanAndDestroy() {
-  scanCount++;
-  console.log(`[HelioRa Cookie] Scan #${scanCount}`);
-  
-  // Remove banners
-  const removed = nukeCookieBanners();
-  
-  // Click decline if available
-  const clicked = clickDeclineButtons();
-  
-  if (removed > 0 || clicked) {
-    console.log('[HelioRa Cookie] Action taken - removed or clicked');
+  if (typeof scanAndDestroy.lock !== "undefined") return;
+  scanAndDestroy.lock = true;
+
+  scanAndDestroy.count = (scanAndDestroy.count || 0) + 1;
+  console.log(`[HelioRa Cookie] Scan #${scanAndDestroy.count}`);
+
+  try {
+    const removed = nukeCookieBanners();
+    const clicked = clickDeclineButtons();
+    scanIframes();
+    scanShadowDOM();
+
+
+    if (removed > 0 || clicked) {
+      console.log('[HelioRa Cookie] Action taken');
+    }
+  } catch (e) {
+    console.warn('[HelioRa Cookie] Scan error:', e);
   }
+
+  setTimeout(() => {
+    scanAndDestroy.lock = false;
+  }, 150);
 }
+(function hookHistory() {
+  if (window.__helioHistoryHooked) return;
+  window.__helioHistoryHooked = true;
+
+  const pushState = history.pushState.bind(history);
+  const replaceState = history.replaceState.bind(history);
+
+  history.pushState = function () {
+    const r = pushState(...arguments);
+    setTimeout(scanAndDestroy, 80);
+    setTimeout(scanAndDestroy, 300);
+    return r;
+  };
+
+  history.replaceState = function () {
+    const r = replaceState(...arguments);
+    setTimeout(scanAndDestroy, 80);
+    setTimeout(scanAndDestroy, 300);
+    return r;
+  };
+
+  window.addEventListener('popstate', () => {
+    setTimeout(scanAndDestroy, 80);
+    setTimeout(scanAndDestroy, 300);
+  });
+})();
+
+function scanIframes() {
+  document.querySelectorAll("iframe").forEach(frame => {
+    try {
+      const doc = frame.contentDocument || frame.contentWindow?.document;
+      if (!doc) return;
+
+      doc.querySelectorAll(`
+        [id*="cookie"], [class*="cookie"],
+        [id*="consent"], [class*="consent"],
+        [aria-label*="cookie" i]
+      `).forEach(el => el.remove());
+    } catch (e) {
+      // Cross-origin iframe, can't touch — expected
+    }
+  });
+}
+function scanShadowDOM(root = document) {
+  const all = root.querySelectorAll("*");
+  all.forEach(el => {
+    if (el.shadowRoot) {
+      try {
+        el.shadowRoot.querySelectorAll(`
+          [id*="cookie"], [class*="cookie"],
+          [id*="consent"], [class*="consent"],
+          [aria-label*="cookie" i]
+        `).forEach(node => node.remove());
+
+        scanShadowDOM(el.shadowRoot);
+      } catch (e) { }
+    }
+  });
+}
+document.querySelectorAll("body > div").forEach(el => {
+  const txt = el.innerText?.toLowerCase() || "";
+  if (txt.includes("cookie") && txt.includes("use")) {
+    el.remove();
+  }
+});
+
+function visionConsentNuke() {
+  document.querySelectorAll("div").forEach(el => {
+    try {
+      const t = el.innerText?.toLowerCase() || "";
+      const c = el.className?.toString().toLowerCase() || "";
+
+      if (
+        (t.includes("cookie") && t.includes("use")) ||
+        c.includes("cookie") ||
+        c.includes("consent")
+      ) {
+        el.remove();
+        document.body.style.overflow = "auto";
+        document.documentElement.style.overflow = "auto";
+      }
+    } catch {}
+  });
+}
+
+// aggressive polling for React hydration
+setInterval(visionConsentNuke, 300);
+setTimeout(visionConsentNuke, 1000);
+setTimeout(visionConsentNuke, 3000);
 
 // Run immediately
 scanAndDestroy();
@@ -322,23 +478,33 @@ setTimeout(() => scanAndDestroy(), 2000);
 setTimeout(() => scanAndDestroy(), 3000);
 
 // Monitor for new banners
+let scanQueued = false;
 const observer = new MutationObserver(() => {
-  scanAndDestroy();
+  if (!scanQueued) {
+    scanQueued = true;
+    requestAnimationFrame(() => {
+      scanQueued = false;
+      scanAndDestroy();
+    });
+  }
 });
 
+
 if (document.body) {
-  observer.observe(document.body, {
+  observer.observe(document.documentElement, {
     childList: true,
     subtree: true
   });
 } else {
   document.addEventListener('DOMContentLoaded', () => {
-    observer.observe(document.body, {
+    observer.observe(document.documentElement, {
+
       childList: true,
       subtree: true
     });
   });
 }
+
 
 // Scan every 3 seconds as backup
 setInterval(() => scanAndDestroy(), 3000);

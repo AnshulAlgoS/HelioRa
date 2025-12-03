@@ -32,7 +32,7 @@
         "cookie_blocker.js"
       ],
       "run_at": "document_start",
-      "all_frames": false
+      "all_frames": true
     },
     {
       "matches": [
@@ -42,7 +42,8 @@
         "content_script.js",
         "fraud_detector.js"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_idle",
+      "all_frames": true
     }
   ],
   "action": {
