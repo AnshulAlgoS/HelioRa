@@ -203,36 +203,6 @@ git clone https://github.com/techchipnet/CamPhish
 cd CamPhish
 bash camphish.sh
 ```
-
-## 📁 Project Structure
-
-```
-HelioRa/
-├── manifest.json                  # Extension config (strict permissions, no bloat)
-├── service_worker.js              # Background security engine (1377 lines)
-├── surveillance_protection.js     # API override system (761 lines, main world context)
-├── surveillance_logger.js         # Forensic logging system (444 lines)
-├── surveillance_injector.js       # Protection script injector (26 lines)
-├── surveillance_blocker.js        # Real-time defense (490 lines)
-├── content_script.js              # Behavior detection & monitoring (531 lines)
-├── fraud_detector.js              # Fraud pattern detection (599 lines)
-├── cookie_blocker.js              # Cookie banner remover (346 lines)
-├── popup.html                     # Extension dashboard UI (289 lines)
-├── popup.js                       # Dashboard logic (658 lines)
-├── popup.css                      # Modern UI styling (924 lines)
-├── warning.html                   # Phishing warning page (298 lines)
-├── rules.json                     # Ad blocking rules (151 lines)
-├── PERMISSIONS.md                 # Every permission justified (NEW!)
-├── LOG_SCHEMA.md                  # Forensic logging specification (NEW!)
-├── icons/                         # Extension icons
-│   ├── icon16.png
-│   ├── icon48.png
-│   └── icon128.png
-└── README.md                      # This file
-
-Total: 6,906+ lines of production code
-```
-
 ## 🎨 Dashboard Overview
 
 ### Main Interface
