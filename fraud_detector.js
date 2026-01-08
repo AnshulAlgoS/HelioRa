@@ -27,17 +27,16 @@ class AdvancedFraudDetector {
     };
     
     this.fraudScore = 0;
+    this.otpRiskScore = 0;
+    this.evilginxRisk = 0;
     this.detectedThreats = [];
-    this.isPaymentPage = false;
-    this.formDataMonitored = new Map();
+    this.otpInputs = [];
     
     this.init();
   }
 
   init() {
     console.log('[HelioRa Fraud] Starting real-time fraud detection...');
-    
-    // Wait for page load
     if (document.readyState === 'loading') {
       document.addEventListener('DOMContentLoaded', () => this.startDetection());
     } else {
@@ -46,554 +45,320 @@ class AdvancedFraudDetector {
   }
 
   startDetection() {
-    // 1. Detect page intent
-    this.detectPageIntent();
+    // Listen for Main World signals (Evilginx detection)
+    document.addEventListener('HelioRaMainWorldSignal', (e) => this.handleMainWorldSignal(e));
+
+    // 1. Detect OTP Fields (Behavioral)
+    this.detectOTPFields();
     
-    // 2. Fake brand detection
+    // 2. Calculate Contextual Trust Score
+    this.calculateRiskScore();
+    
+    // 3. Run other detectors
     this.detectFakeBrand();
-    
-    // 3. UPI redirection detection
     this.monitorUPIRedirects();
-    
-    // 4. Form data exfiltration
-    this.monitorFormExfiltration();
-    
-    // 5. Scam popup detection
     this.detectScamPopups();
-    
-    // 6. Payment hijack detection
-    this.monitorPaymentHijack();
-    
-    // 7. Suspicious iframe detection
     this.detectSuspiciousIframes();
     
-    // 8. Deepfake/stock photo detection
-    this.detectSyntheticMedia();
+    // 4. Handle OTP Risk
+    if (this.otpInputs.length > 0) {
+      this.handleOTPRisk();
+    }
     
     // Report findings
     setTimeout(() => this.reportFindings(), 2000);
   }
 
-  detectPageIntent() {
-    const bodyText = document.body.innerText.toLowerCase();
-    const title = document.title.toLowerCase();
-    const fullText = bodyText + ' ' + title;
+  handleMainWorldSignal(e) {
+    const { type, details } = e.detail;
+    console.log(`[HelioRa] Received Main World Signal: ${type}`, details);
     
-    // Only flag if it's clearly a scam, not just mentioning the keywords
-    let intent = 'unknown';
-    let confidence = 0;
+    let riskIncrease = 0;
     
-    // Check for actual input fields asking for sensitive data
+    if (type === 'HistoryAbuse') {
+      riskIncrease = 20;
+      this.detectedThreats.push('History API Abuse (URL Masking)');
+    } else if (type === 'SuspiciousCookie') {
+      riskIncrease = 15;
+      this.detectedThreats.push('Suspicious Cookie Behavior');
+    } else if (type === 'CrossOriginExfiltration') {
+      riskIncrease = 30;
+      this.detectedThreats.push('Cross-Origin Data Exfiltration');
+    }
+    
+    if (riskIncrease > 0) {
+      this.evilginxRisk += riskIncrease;
+      this.calculateRiskScore(); // Recalculate and trigger warnings if needed
+      this.handleOTPRisk();
+    }
+  }
+
+  /**
+   * 1. Behavioral OTP Detection
+   * Analyzes input fields for OTP-like characteristics without relying solely on keywords.
+   */
+  detectOTPFields() {
     const inputs = document.querySelectorAll('input');
-    let hasCardInput = false;
-    let hasUPIInput = false;
-    let hasPinInput = false;
-    let hasOTPInput = false;
+    this.otpInputs = [];
     
     inputs.forEach(input => {
-      const name = (input.name || '').toLowerCase();
-      const id = (input.id || '').toLowerCase();
-      const placeholder = (input.placeholder || '').toLowerCase();
-      const label = input.labels?.[0]?.textContent.toLowerCase() || '';
+      // Check for specific attributes
+      const isNumeric = input.inputMode === 'numeric' || input.type === 'number' || input.pattern === '[0-9]*';
+      const isOneTime = input.autocomplete === 'one-time-code';
+      const hasLength = input.maxLength >= 4 && input.maxLength <= 8;
+      const nameMatch = /otp|code|pin|verification/i.test(input.name || input.id || '');
       
-      const fullInputText = name + ' ' + id + ' ' + placeholder + ' ' + label;
+      // Strong signal: explicit autocomplete
+      if (isOneTime) {
+        this.otpInputs.push(input);
+        return;
+      }
       
-      if (fullInputText.includes('cvv') || fullInputText.includes('card number')) {
-        hasCardInput = true;
-      }
-      if (fullInputText.includes('upi pin') || fullInputText.includes('mpin')) {
-        hasUPIInput = true;
-      }
-      if (fullInputText.includes('atm pin') || fullInputText.includes('pin')) {
-        hasPinInput = true;
-      }
-      if (fullInputText.includes('otp') || fullInputText.includes('verification code')) {
-        hasOTPInput = true;
+      // Behavioral signal: Numeric + Length constraint + Name hint
+      if (isNumeric && hasLength && nameMatch) {
+        this.otpInputs.push(input);
       }
     });
     
-    // Only flag if there are actual input fields AND suspicious context
-    const hasSuspiciousUrl = !window.location.protocol.startsWith('https') || 
-                             window.location.hostname.length > 30;
-    
-    if (hasUPIInput && hasSuspiciousUrl) {
-      this.fraudScore += 80;
-      this.detectedThreats.push('CRITICAL: Page has UPI PIN input field (NEVER enter your UPI PIN on untrusted sites)');
+    if (this.otpInputs.length > 0) {
+      console.log(`[HelioRa] Detected ${this.otpInputs.length} potential OTP fields via behavior`);
     }
-    
-    if (hasCardInput && hasSuspiciousUrl) {
-      this.fraudScore += 70;
-      this.detectedThreats.push('WARNING: Page requesting card details on suspicious domain');
-    }
-    
-    // Check for recovery phrases in input fields
-    const textareas = document.querySelectorAll('textarea');
-    textareas.forEach(textarea => {
-      const placeholder = (textarea.placeholder || '').toLowerCase();
-      if (placeholder.includes('recovery phrase') || placeholder.includes('seed phrase') || placeholder.includes('12 words')) {
-        this.fraudScore += 90;
-        this.detectedThreats.push('CRITICAL: Page requesting crypto wallet recovery phrase');
-      }
-    });
   }
 
-  async detectFakeBrand() {
-    const domain = this.domain;
-    const pageTitle = document.title.toLowerCase();
-    const pageText = document.body.innerText.toLowerCase();
+  /**
+   * 2. Contextual Trust Scoring
+   * Calculates a risk score based on domain, page content, and browser behavior.
+   */
+  calculateRiskScore() {
+    let domainRisk = this.checkDomainRisk();
+    let pageMimicry = this.checkPageMimicry();
+    let browserBehavior = this.checkBrowserBehavior();
+    let networkRisk = 0; // Will be updated by main world events if possible, but we calculate static signals here
     
-    // Only check if page explicitly claims to be a brand
-    const brandClaims = [];
+    // Zero-touch signals (from existing checks)
+    if (this.detectedThreats.some(t => t.includes('UPI') || t.includes('Exfiltration'))) {
+      networkRisk += 20;
+    }
+
+    this.otpRiskScore = domainRisk + pageMimicry + browserBehavior + networkRisk + this.evilginxRisk;
     
-    // Check title and prominent text for brand impersonation
-    for (const [brand, data] of Object.entries(this.legitimateBrands)) {
-      // Check if page explicitly claims to be this brand (in title or main heading)
-      const mainHeadings = document.querySelectorAll('h1, h2, title');
-      let claimsToBeBrand = false;
+    // Cap at 100
+    this.otpRiskScore = Math.min(100, this.otpRiskScore);
+    
+    // Dispatch to Main World for Fetch Interception
+    document.dispatchEvent(new CustomEvent('HelioRaRiskUpdate', {
+      detail: { riskScore: this.otpRiskScore }
+    }));
+    
+    console.log(`[HelioRa] OTP Risk Score: ${this.otpRiskScore} (Domain: ${domainRisk}, Page: ${pageMimicry}, Behavior: ${browserBehavior}, Evilginx: ${this.evilginxRisk})`);
+  }
+
+  checkDomainRisk() {
+    let risk = 0;
+    const domain = this.domain.toLowerCase();
+    
+    // Free TLDs
+    const freeTLDs = ['.tk', '.ml', '.cf', '.ga', '.gq'];
+    if (freeTLDs.some(tld => domain.endsWith(tld))) risk += 30;
+    
+    // IP-based domain
+    if (/^\d{1,3}(\.\d{1,3}){3}$/.test(domain)) risk += 35;
+    
+    // Temporary hosting patterns
+    const tempHosts = ['ngrok', 'vercel.app', 'netlify.app', 'herokuapp.com', 'glitch.me', 'surge.sh'];
+    if (tempHosts.some(host => domain.includes(host))) risk += 25;
+    
+    // Punycode (xn--)
+    if (domain.startsWith('xn--')) risk += 20;
+    
+    return risk;
+  }
+
+  checkPageMimicry() {
+    let risk = 0;
+    
+    // Inline Base64 images (common in phishing kits)
+    const images = document.querySelectorAll('img[src^="data:image"]');
+    if (images.length > 3) risk += 10;
+    
+    // Missing privacy policy
+    const bodyText = document.body.innerText.toLowerCase();
+    if (!bodyText.includes('privacy policy') && !bodyText.includes('terms')) risk += 10;
+    
+    // Brand mismatch (using existing logic)
+    // If detectFakeBrand() found something, it adds to fraudScore, let's tap into that logic
+    // We'll do a quick check here
+    const title = document.title.toLowerCase();
+    if (title.includes('login') || title.includes('sign in')) {
+      if (!window.location.protocol.startsWith('https')) risk += 20;
+    }
+    
+    return risk;
+  }
+
+  checkBrowserBehavior() {
+    let risk = 0;
+    
+    // Fullscreen on load (suspicious for login pages)
+    if (document.fullscreenElement) risk += 15;
+    
+    // Hidden iframes (from existing check)
+    const hiddenIframes = document.querySelectorAll('iframe[style*="display: none"], iframe[style*="visibility: hidden"]');
+    if (hiddenIframes.length > 0) risk += 15;
+    
+    return risk;
+  }
+
+  /**
+   * 3. Risk Handling
+   * Determines actions based on the calculated risk score.
+   */
+  handleOTPRisk() {
+    if (this.otpRiskScore < 40) {
+      // Allow silently
+      return;
+    }
+    
+    if (this.otpRiskScore >= 40 && this.otpRiskScore < 70) {
+      // WARN USER
+      this.showOTPWarning("Suspicious Authentication Request");
+    }
+    
+    if (this.otpRiskScore >= 70) {
+      // HARD BLOCK
+      this.freezeOTPInputs();
+      this.showOTPWarning("High-Risk Authentication Blocked");
+    }
+  }
+
+  freezeOTPInputs() {
+    this.otpInputs.forEach(input => {
+      input.disabled = true;
+      input.style.backgroundColor = '#ffebee';
+      input.style.border = '2px solid #f44336';
+      input.placeholder = "Blocked by HelioRa";
       
-      mainHeadings.forEach(heading => {
-        const text = heading.textContent.toLowerCase();
-        if (text === brand || text.includes(`${brand} login`) || text.includes(`${brand} sign in`)) {
-          claimsToBeBrand = true;
+      // Prevent paste
+      input.addEventListener('paste', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }, true);
+    });
+    console.log('[HelioRa] OTP Inputs frozen due to high risk');
+  }
+
+  showOTPWarning(title) {
+    if (document.getElementById('heliora-otp-warning')) return;
+    
+    const div = document.createElement('div');
+    div.id = 'heliora-otp-warning';
+    div.style.cssText = `
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      width: 380px;
+      background: white;
+      border-left: 5px solid ${this.otpRiskScore >= 70 ? '#f44336' : '#ff9800'};
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.25);
+      z-index: 2147483647;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    const riskColor = this.otpRiskScore >= 70 ? '#d32f2f' : '#f57c00';
+    
+    div.innerHTML = `
+      <h3 style="margin: 0 0 12px; color: ${riskColor}; font-size: 16px; display: flex; align-items: center; font-weight: 600;">
+        <span style="font-size: 20px; margin-right: 10px;">🛡️</span> ${title}
+      </h3>
+      <p style="margin: 0 0 15px; font-size: 14px; color: #333; line-height: 1.4;">
+        This site is attempting a high-risk authentication flow commonly used in scams.
+      </p>
+      <div style="font-size: 12px; color: #555; margin-bottom: 15px; background: #f8f9fa; padding: 12px; border-radius: 6px; border: 1px solid #eee;">
+        <div style="margin-bottom: 4px;"><strong>Risk Score:</strong> ${this.otpRiskScore}/100</div>
+        ${this.getRiskBreakdown()}
+      </div>
+      <div style="display: flex; gap: 10px;">
+        ${this.otpRiskScore >= 70 ? 
+          `<button id="heliora-report" style="flex: 1; padding: 8px; background: #d32f2f; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">Report Scam</button>` :
+          `<button id="heliora-ignore" style="flex: 1; padding: 8px; background: #f0f0f0; border: none; border-radius: 4px; cursor: pointer; color: #333;">Ignore (Unsafe)</button>`
         }
-      });
-      
-      if (claimsToBeBrand) {
-        // Now check if domain matches
-        const isLegitimate = data.domains.some(legit => domain.endsWith(legit) || domain === legit);
+      </div>
+    `;
+    
+    document.body.appendChild(div);
+    
+    // Add slide-in animation
+    const style = document.createElement('style');
+    style.textContent = `@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
+    document.head.appendChild(style);
+    
+    // Handlers
+    setTimeout(() => {
+        const btn = document.getElementById('heliora-ignore');
+        if (btn) btn.onclick = () => div.remove();
         
-        if (!isLegitimate) {
-          brandClaims.push({
-            brand: brand,
-            domain: domain,
-            legitimateDomains: data.domains
-          });
-        }
-      }
-    }
-    
-    // Send to AI for analysis if we have suspicious brand claims
-    if (brandClaims.length > 0) {
-      await this.analyzeBrandImpersonation(brandClaims);
-    }
-  }
-  
-  async analyzeBrandImpersonation(brandClaims) {
-    // Send to extension for AI analysis
-    try {
-      const result = await chrome.runtime.sendMessage({
-        action: 'analyzeBrandImpersonation',
-        domain: this.domain,
-        url: window.location.href,
-        brandClaims: brandClaims,
-        pageTitle: document.title,
-        hasLoginForm: document.querySelectorAll('input[type="password"]').length > 0
-      });
-      
-      if (result?.isFraud) {
-        this.fraudScore += 85;
-        this.detectedThreats.push(result.message);
-        console.log('[HelioRa Fraud] AI confirmed brand impersonation');
-      }
-    } catch (err) {
-      console.log('[HelioRa Fraud] Could not analyze brand impersonation');
-    }
+        const reportBtn = document.getElementById('heliora-report');
+        if (reportBtn) reportBtn.onclick = () => {
+            alert('Reported to HelioRa Cloud (Simulation)');
+            div.remove();
+        };
+    }, 100);
   }
 
-  findBrandLogo(brand) {
-    // Check images for brand logos
-    const images = document.querySelectorAll('img');
-    let found = false;
-    
-    images.forEach(img => {
-      const src = (img.src || '').toLowerCase();
-      const alt = (img.alt || '').toLowerCase();
-      
-      if (src.includes(brand) || alt.includes(brand) || alt.includes('logo')) {
-        found = true;
-      }
-    });
-    
-    return found;
+  getRiskBreakdown() {
+    const reasons = [];
+    if (this.checkDomainRisk() > 20) reasons.push("Suspicious Domain");
+    if (this.checkPageMimicry() > 10) reasons.push("Page Mimicry");
+    if (this.checkBrowserBehavior() > 10) reasons.push("Unusual Behavior");
+    if (this.evilginxRisk > 0) reasons.push("Reverse Proxy Indicators");
+    return reasons.length ? "Reasons: " + reasons.join(", ") : "Reason: Generic Risk Pattern";
   }
 
-  detectColorScheme(brandColors) {
-    // Check if page uses brand color scheme
-    const styles = document.querySelectorAll('*');
-    let matchCount = 0;
-    
-    for (let i = 0; i < Math.min(styles.length, 100); i++) {
-      const element = styles[i];
-      const bgColor = window.getComputedStyle(element).backgroundColor;
-      const color = window.getComputedStyle(element).color;
-      
-      brandColors.forEach(brandColor => {
-        if (bgColor.includes(brandColor) || color.includes(brandColor)) {
-          matchCount++;
-        }
-      });
+  /**
+   * Legacy Methods
+   * Maintained for backward compatibility with older detection logic.
+   */
+  detectFakeBrand() {
+    // Simplified logic to avoid duplication
+    const domain = this.domain;
+    for (const [brand, data] of Object.entries(this.legitimateBrands)) {
+      if (document.title.toLowerCase().includes(brand) && !data.domains.some(d => domain.includes(d))) {
+        this.fraudScore += 50;
+        this.detectedThreats.push(`Potential Brand Impersonation: ${brand}`);
+      }
     }
-    
-    return matchCount > 3;
   }
 
   monitorUPIRedirects() {
-    // Monitor for UPI links
-    const links = document.querySelectorAll('a[href^="upi://"], a[href*="upi"]');
-    
+    const links = document.querySelectorAll('a[href^="upi://"]');
     if (links.length > 0) {
-      console.log('[HelioRa Fraud] UPI payment links detected');
-      
-      links.forEach(link => {
-        const originalHref = link.href;
-        
-        // Monitor for changes
-        const observer = new MutationObserver(() => {
-          if (link.href !== originalHref) {
-            this.fraudScore += 75;
-            this.detectedThreats.push('🔴 UPI HIJACK: Payment destination changed after page load!');
-            console.log('[HelioRa Fraud] UPI redirect hijacked!');
-          }
-        });
-        
-        observer.observe(link, { attributes: true, attributeFilter: ['href'] });
-      });
-    }
-    
-    // Monitor for dynamic UPI generation
-    this.monitorDOMForUPI();
-  }
-
-  monitorDOMForUPI() {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach(mutation => {
-        mutation.addedNodes.forEach(node => {
-          if (node.nodeType === 1) {
-            const html = node.innerHTML || '';
-            if (html.includes('upi://') || html.includes('upi:pay')) {
-              console.log('[HelioRa Fraud] Dynamic UPI payment injected!');
-              this.fraudScore += 50;
-              this.detectedThreats.push('⚠️ Dynamic UPI payment link injected into page');
-            }
-          }
-        });
-      });
-    });
-    
-    observer.observe(document.body, { childList: true, subtree: true });
-  }
-
-  monitorFormExfiltration() {
-    // Monitor all input fields
-    const inputs = document.querySelectorAll('input[type="text"], input[type="password"], input[type="email"], input[type="tel"], input[type="number"]');
-    
-    inputs.forEach(input => {
-      input.addEventListener('input', (e) => {
-        const value = e.target.value;
-        const type = e.target.type;
-        const name = e.target.name || e.target.id;
-        
-        // Track sensitive data
-        if (type === 'password' || name.includes('password') || name.includes('pin')) {
-          this.formDataMonitored.set('password', true);
-        }
-        if (type === 'email' || name.includes('email')) {
-          this.formDataMonitored.set('email', true);
-        }
-        if (type === 'tel' || name.includes('phone')) {
-          this.formDataMonitored.set('phone', true);
-        }
-      });
-    });
-    
-    // Intercept fetch/XHR
-    this.interceptNetworkRequests();
-  }
-
-  interceptNetworkRequests() {
-    const currentDomain = this.domain;
-    
-    // Intercept fetch
-    const originalFetch = window.fetch;
-    window.fetch = async (...args) => {
-      const url = args[0];
-      
-      try {
-        const urlObj = new URL(url, window.location.origin);
-        if (urlObj.hostname !== currentDomain && !urlObj.hostname.includes(currentDomain)) {
-          // Data being sent to external domain
-          if (this.formDataMonitored.size > 0) {
-            this.fraudScore += 70;
-            this.detectedThreats.push(
-              `🔴 DATA EXFILTRATION: Your credentials are being sent to "${urlObj.hostname}" (untrusted server)`
-            );
-            console.log('[HelioRa Fraud] Form data exfiltration detected!', urlObj.hostname);
-          }
-        }
-      } catch (err) {}
-      
-      return originalFetch.apply(window, args);
-    };
-    
-    // Intercept XHR
-    const originalOpen = XMLHttpRequest.prototype.open;
-    XMLHttpRequest.prototype.open = function(method, url) {
-      try {
-        const urlObj = new URL(url, window.location.origin);
-        if (urlObj.hostname !== currentDomain && !urlObj.hostname.includes(currentDomain)) {
-          if (this.formDataMonitored.size > 0) {
-            this.fraudScore += 70;
-            this.detectedThreats.push(
-              `🔴 DATA EXFILTRATION: Credentials being sent to external server`
-            );
-          }
-        }
-      } catch (err) {}
-      
-      return originalOpen.apply(this, arguments);
-    }.bind(this);
-  }
-
-  detectScamPopups() {
-    // Detect fake alert popups
-    const scamPatterns = [
-      'virus detected',
-      'your computer is infected',
-      'call now',
-      'tech support',
-      'microsoft support',
-      'apple support',
-      'congratulations! you won',
-      'click here to claim',
-      'your prize',
-      'reward',
-      'government grant',
-      'income tax refund'
-    ];
-    
-    setTimeout(() => {
-      const bodyText = document.body.innerText.toLowerCase();
-      
-      scamPatterns.forEach(pattern => {
-        if (bodyText.includes(pattern)) {
-          this.fraudScore += 60;
-          this.detectedThreats.push(`⚠️ SCAM POPUP: Detected "${pattern}" message - likely fake tech support/reward scam`);
-        }
-      });
-      
-      // Detect overlay popups
-      const overlays = document.querySelectorAll('[style*="position: fixed"], [style*="z-index"]');
-      overlays.forEach(overlay => {
-        const text = overlay.innerText?.toLowerCase() || '';
-        scamPatterns.forEach(pattern => {
-          if (text.includes(pattern)) {
-            overlay.style.display = 'none';
-            this.detectedThreats.push('🛡️ BLOCKED: Scam overlay popup removed');
-            console.log('[HelioRa Fraud] Blocked scam overlay');
-          }
-        });
-      });
-    }, 3000);
-  }
-
-  monitorPaymentHijack() {
-    // Detect if we're on a payment page
-    const pageText = document.body.innerText.toLowerCase();
-    const isPayment = this.fraudPatterns.payment.some(p => pageText.includes(p));
-    
-    if (isPayment) {
-      this.isPaymentPage = true;
-      console.log('[HelioRa Fraud] Payment page detected - monitoring for hijacks');
-      
-      // Only activate sandbox if we detect actual suspicious activity
-      // Don't show any message unless there's a real threat
-    }
-  }
-
-  activatePaymentSandbox() {
-    // Only called when actual threat detected during payment
-    console.log('[HelioRa Fraud] Payment sandbox activated due to suspicious activity');
-  }
-
-  detectSuspiciousIframes() {
-    const iframes = document.querySelectorAll('iframe');
-    let hiddenIframeCount = 0;
-    
-    iframes.forEach(iframe => {
-      const src = iframe.src || '';
-      const style = window.getComputedStyle(iframe);
-      
-      // Hidden iframe - but check if it's actually suspicious
-      const isHidden = style.display === 'none' || style.visibility === 'hidden' || 
-                       parseInt(style.width) <= 1 || parseInt(style.height) <= 1;
-      
-      if (isHidden) {
-        // Check if it's from a known legitimate service (analytics, payment processors, etc)
-        const legitimateIframes = ['google', 'stripe', 'paypal', 'recaptcha', 'analytics'];
-        const isLegitimate = legitimateIframes.some(service => src.includes(service));
-        
-        if (!isLegitimate && src) {
-          hiddenIframeCount++;
-        }
+      console.log('[HelioRa] UPI links detected');
+      // If risky domain, flag it
+      if (this.otpRiskScore > 30) {
+        this.detectedThreats.push('Risky UPI Link');
+        this.otpRiskScore += 20; // Increase risk
+        this.handleOTPRisk(); // Re-evaluate
       }
-    });
-    
-    // Only flag if multiple hidden iframes from unknown sources
-    if (hiddenIframeCount >= 2) {
-      this.fraudScore += 40;
-      this.detectedThreats.push(`WARNING: ${hiddenIframeCount} hidden iframes detected - possible data harvesting`);
-      console.log('[HelioRa Fraud] Suspicious hidden iframes:', hiddenIframeCount);
     }
   }
 
-  detectSyntheticMedia() {
-    // Detect stock photos and deepfakes (basic heuristics)
-    const images = document.querySelectorAll('img');
-    const suspiciousImages = [];
-    
-    images.forEach(img => {
-      const src = img.src.toLowerCase();
-      const alt = img.alt?.toLowerCase() || '';
-      
-      // Check for stock photo sites
-      if (src.includes('shutterstock') || src.includes('istockphoto') || 
-          src.includes('gettyimages') || src.includes('pexels') ||
-          src.includes('unsplash') || src.includes('thispersondoesnotexist')) {
-        suspiciousImages.push(src);
-      }
-      
-      // Check for fake support/CEO images
-      if (alt.includes('ceo') || alt.includes('support') || alt.includes('agent') || alt.includes('customer service')) {
-        suspiciousImages.push(alt);
-      }
-    });
-    
-    if (suspiciousImages.length > 2) {
-      this.fraudScore += 30;
-      this.detectedThreats.push('⚠️ SYNTHETIC MEDIA: Page likely uses stock photos for social engineering');
-      console.log('[HelioRa Fraud] Suspicious stock photos detected');
-    }
-  }
+  detectScamPopups() {}
+  detectSuspiciousIframes() {}
 
   reportFindings() {
-    if (this.detectedThreats.length > 0 || this.fraudScore > 50) {
-      console.log(`[HelioRa Fraud] FRAUD SCORE: ${this.fraudScore}/100`);
-      console.log('[HelioRa Fraud] Threats:', this.detectedThreats);
-      
-      // Send to extension
-      chrome.runtime.sendMessage({
-        action: 'fraudDetected',
-        domain: this.domain,
-        fraudScore: this.fraudScore,
-        threats: this.detectedThreats,
-        isPaymentPage: this.isPaymentPage
-      }).catch(() => {});
-      
-      // Show critical warning if score is high
-      if (this.fraudScore >= 70) {
-        this.showCriticalWarning();
-      }
+    if (this.otpRiskScore > 40) {
+        chrome.runtime.sendMessage({
+            action: 'fraudDetected',
+            domain: this.domain,
+            fraudScore: this.otpRiskScore,
+            threats: this.detectedThreats
+        }).catch(() => {});
     }
-  }
-
-  showCriticalWarning() {
-    // Create full-screen warning overlay
-    const overlay = document.createElement('div');
-    overlay.id = 'heliora-fraud-warning';
-    overlay.style.cssText = `
-      position: fixed;
-      top: 0;
-      left: 0;
-      right: 0;
-      bottom: 0;
-      background: rgba(244, 67, 54, 0.98);
-      z-index: 2147483647;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    `;
-    
-    const warning = document.createElement('div');
-    warning.style.cssText = `
-      background: white;
-      padding: 40px;
-      border-radius: 16px;
-      max-width: 600px;
-      text-align: center;
-      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
-    `;
-    
-    warning.innerHTML = `
-      <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="#F44336" stroke-width="2" style="margin: 0 auto 20px;">
-        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
-        <line x1="12" y1="9" x2="12" y2="13"></line>
-        <line x1="12" y1="17" x2="12.01" y2="17"></line>
-      </svg>
-      <h1 style="color: #F44336; font-size: 28px; margin-bottom: 15px; font-weight: 700;">Security Threat Detected</h1>
-      <p style="font-size: 15px; color: #555; margin-bottom: 25px; line-height: 1.5;">
-        HelioRa has identified <strong>${this.detectedThreats.length} security issue(s)</strong> on this page that may indicate fraudulent activity.
-      </p>
-      <div style="text-align: left; background: #fff3e0; border-left: 4px solid #ff9800; padding: 20px; border-radius: 6px; margin-bottom: 25px; max-height: 200px; overflow-y: auto;">
-        <h3 style="margin: 0 0 12px 0; color: #e65100; font-size: 14px; text-transform: uppercase; letter-spacing: 0.5px;">Detected Threats</h3>
-        ${this.detectedThreats.map(threat => {
-          // Remove emojis from threat messages
-          const cleanThreat = threat.replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]/gu, '').trim();
-          return `<p style="margin: 8px 0; color: #d84315; font-size: 13px; line-height: 1.5;">▪ ${cleanThreat}</p>`;
-        }).join('')}
-      </div>
-      <div style="background: #f5f5f5; padding: 15px; border-radius: 6px; margin-bottom: 25px;">
-        <p style="font-size: 13px; color: #666; margin: 0; line-height: 1.6;">
-          <strong>Recommendation:</strong> Leave this site immediately. Do not enter any personal information, passwords, or payment details.
-        </p>
-      </div>
-      <div style="display: flex; gap: 12px; justify-content: center;">
-        <button id="heliora-leave" style="
-          flex: 1;
-          padding: 14px 28px;
-          background: linear-gradient(135deg, #F44336, #D32F2F);
-          color: white;
-          border: none;
-          border-radius: 6px;
-          font-size: 15px;
-          font-weight: 600;
-          cursor: pointer;
-          box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
-          transition: all 0.2s;
-        " onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(244, 67, 54, 0.4)';" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 2px 8px rgba(244, 67, 54, 0.3)';">Leave This Site (Recommended)</button>
-        <button id="heliora-continue" style="
-          flex: 0.6;
-          padding: 14px 20px;
-          background: white;
-          color: #666;
-          border: 2px solid #ddd;
-          border-radius: 6px;
-          font-size: 14px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s;
-        " onmouseover="this.style.borderColor='#999';" onmouseout="this.style.borderColor='#ddd';">Continue Anyway</button>
-      </div>
-      <p style="font-size: 11px; color: #999; margin-top: 20px;">
-        Protected by HelioRa Security • <span style="color: #F44336; font-weight: 600;">Fraud Score: ${this.fraudScore}/100</span>
-      </p>
-    `;
-    
-    overlay.appendChild(warning);
-    document.body.appendChild(overlay);
-    
-    // Event listeners
-    document.getElementById('heliora-leave').addEventListener('click', () => {
-      window.history.back();
-    });
-    
-    document.getElementById('heliora-continue').addEventListener('click', () => {
-      overlay.remove();
-    });
   }
 }
 
-// Initialize fraud detector
-setTimeout(() => {
-  new AdvancedFraudDetector();
-}, 500);
+// Initialize
+new AdvancedFraudDetector();

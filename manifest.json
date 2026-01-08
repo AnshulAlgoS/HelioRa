@@ -57,7 +57,7 @@
   "declarative_net_request": {
     "rule_resources": [
       {
-        "id": "ad_blocking_rules",
+        "id": "ruleset_all",
         "enabled": true,
         "path": "rules.json"
       }

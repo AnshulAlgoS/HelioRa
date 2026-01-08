@@ -1,321 +1,63 @@
-# HelioRa Security
+# HelioRa
 
-> Advanced browser defense system with real-time surveillance protection and AI-powered threat
-> analysis
+HelioRa is a Chrome extension designed to stabilize web page behavior and add a decision layer to sensitive browser actions.
 
-[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](https://github.com/AnshulAlgoS/HelioRa)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
-[![Chrome](https://img.shields.io/badge/chrome-extension-red.svg)](https://chrome.google.com/webstore)
+## Context & Motivation
 
-## 🎯 Overview
+This project began as a personal utility to clean up  websites. While testing and scanning pages, I found that ads, trackers, and cookie overlays created significant noise and instability. Although I often run headless scripts for automation, I needed a reliable way to reproduce and stabilize these pages directly in Chrome for manual debugging.
 
-HelioRa is a comprehensive browser security platform that actively prevents covert camera spying,
-silent location harvesting, surveillance phishing, and redirect-based trapping attacks in real
-time—without relying on user awareness alone.
+The project's scope evolved after I encountered "CamPhish" style attacks—techniques that trick users into inadvertently granting camera or microphone access. I realized that while browsers ask for permission, they rarely explain the *context* or *risk* of that request to non-technical users.
+
+I extended HelioRa to act as a **decision and visibility layer**. Instead of just silently blocking or blindly allowing requests, it attempts to "pause and explain" high-risk actions—like submitting credentials, entering OTPs, or granting hardware access—giving the user a chance to understand the risk before proceeding.
+
+## What This Project Is
+
+*   **A Visibility Tool**: It exposes what a page is trying to do (e.g., "This site is asking for camera access immediately after loading" or "You are entering an OTP on a site hosted via a tunneling service").
+*   **A Stability Utility**: It suppresses noise (ads, consent banners) to keep the DOM clean for testing or browsing.
+*   **An Educational Layer**: It provides context for security decisions, helping users recognize patterns associated with phishing or surveillance.
 
 ## ✨ Key Features
 
-### 🛡️ Real-Time Surveillance Protection
-
-- **Camera & Microphone Blocking**: Intercepts `getUserMedia()` before malicious scripts execute
-- **Screen Capture Defense**: Blocks `getDisplayMedia()` on untrusted domains
-- **WebRTC IP Leak Protection**: Prevents hidden `RTCPeerConnection` usage and STUN server
-  exploitation
-- **Clipboard Theft Prevention**: Blocks `navigator.clipboard.readText()` and paste traps on
-  sensitive forms
-- **Form Exfiltration Detection**: Monitors `XMLHttpRequest`/`fetch` for credential theft to
-  third-party domains
-- **GPS Location Blocking**: Intercepts geolocation API on suspicious sites
-- **Tunnel Detection**: Identifies temporary hosting (ngrok, CloudFlare Tunnel, serveo, etc.)
-- **Fake Page Recognition**: Detects festival wishes, fake YouTube Live, and meeting templates
-- **Permission Profiling**: Flags dangerous combinations (camera + GPS + fullscreen + notifications)
-- **Privacy Lockdown**: One-click global disable of all surveillance APIs across entire browser
-
-### 🤖 AI-Powered Security Analysis
-
-- **HelioAI Integration**: NVIDIA-powered threat intelligence
-- **Context-Aware Detection**: Smart false positive reduction
-- **Real-Time Analysis**: Instant security assessment on page load
-- **Actionable Insights**: Clear, user-friendly security recommendations
-
-### 🔥 Advanced Firewall System
-
-- **Dynamic Rules**: Per-domain blocking controls
-- **Network Filtering**: Block tracking, XHR, ads, or all traffic
-- **Auto-Block**: Automatic blocking of dangerous sites
-- **Persistent Rules**: Firewall settings saved across sessions
-
-### 🚫 Ad & Tracker Blocking
-
-- **Network-Level Blocking**: Uses Chrome's declarativeNetRequest API
-- **Real-Time Statistics**: Live counter for blocked ads and trackers
-- **Comprehensive Coverage**: Blocks 50+ ad/tracker domains
-
-### 🍪 Cookie Management
-
-- **Auto-Decline**: Automatically clicks "Reject" on cookie banners
-- **Aggressive Removal**: CSS + DOM-based banner elimination
-- **Multiple Modes**: Block all, third-party only, or auto-decline
-- **Universal Support**: Works on 95%+ of websites
-
-### 🎣 Phishing Protection
-
-- **Pre-Navigation Blocking**: Stops threats before page loads
-- **Multi-Pattern Detection**: 10+ phishing indicators
-- **Typosquatting Detection**: Identifies fake brand domains
-- **IP Address Blocking**: Flags suspicious numeric domains
-- **Professional Warning Pages**: Modern block screens with threat details
-
-### 📊 Professional Security Dashboard
-
-- **Risk Scoring**: 0-100 threat assessment for every site
-- **Event Timeline**: Chronological security events log
-- **Forensic Logging**: Structured surveillance logs with ISO timestamps, risk scores, and action
-  tracking
-- **Export Reports**: JSON, CSV, and formatted text reports for law enforcement/security audits
-- **Privacy Mode**: Anonymized logging (removes URL paths/query params)
-- **Local-Only Storage**: Zero cloud sync - all data stays on your device
-- **Session Tracking**: Unique session IDs for correlation analysis
-- **Statistics Dashboard**: Real-time metrics on blocks, allows, and threat distribution
-
-## 🚀 Architecture & Design
-
-### Comprehensive Surveillance Coverage
-
-HelioRa protects against 9 distinct surveillance vectors:
-
-- ✅ getUserMedia (camera/microphone)
-- ✅ getDisplayMedia (screen capture)
-- ✅ RTCPeerConnection (WebRTC IP leaks)
-- ✅ navigator.clipboard.readText()
-- ✅ Paste traps on login/payment forms
-- ✅ Form exfiltration to third-party domains
-- ✅ Geolocation tracking
-- ✅ Notification spam
-- ✅ Hidden iframe detection
-
-### Minimal Permission Footprint
-
-The extension uses only essential permissions:
-
-- **5 core permissions** - All required for core functionality
-- **3 optional permissions** - User-activated features only
-- **No telemetry** - Zero analytics, tracking, or cloud sync
-- **Fully documented** - See `PERMISSIONS.md` for detailed justification
-
-### Professional Forensic Logging
-
-Structured logging system with:
-
-- ISO 8601 timestamps and unique session IDs
-- Risk scoring (0-100) for each surveillance attempt
-- Privacy modes (standard vs. anonymized)
-- Export formats: JSON, CSV, formatted text reports
-- See `LOG_SCHEMA.md` for complete specification
-
-### Page Context Injection
-
-Runs in the page's JavaScript context (MAIN world) to:
-
-- Override surveillance APIs before malicious scripts load
-- Use `document_start` timing for earliest protection
-- Self-remove after injection to minimize footprint
-- Provide reliable API blocking that content scripts cannot achieve
-
-### macOS System Integration
-
-Cross-layer verification with native macOS app:
-
-- Monitor system-level camera/microphone usage via AVFoundation
-- Detect discrepancies between browser and OS surveillance state
-- HTTP API on localhost for real-time status checks
-- Alert on hidden surveillance attempts bypassing browser security
-- See `macos-monitor/README.md` for setup instructions
-
-### AI-Powered Threat Analysis
-
-Context-aware security assessment:
-
-- NVIDIA-powered threat intelligence (optional)
-- Distinguishes legitimate security tools from actual threats
-- Fallback analysis when offline
-- Anonymous requests with no user tracking
-
-## 📦 Installation
-
-### Chrome Web Store (Recommended)
-
-*Coming Soon*
-
-### Manual Installation (Developer Mode)
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/AnshulAlgoS/HelioRa.git
-   cd HelioRa
-   ```
-
-2. **Open Chrome Extensions**
-    - Navigate to `chrome://extensions/`
-    - Enable **Developer mode** (top-right toggle)
-
-3. **Load the extension**
-    - Click **Load unpacked**
-    - Select the `HelioRa` folder
-    - Extension will activate immediately
-
-4. **Verify installation**
-    - Look for the HelioRa icon in your browser toolbar
-    - Click it to access the dashboard
-
-## 🖥️ macOS Security Enhancements
-
-### System Integration
-
-HelioRa integrates deeply with macOS security features:
-
-**Microphone & Camera Permissions:**
-
-- Utilizes macOS permission prompts as a second layer of defense
-- Even if a malicious site bypasses browser checks, macOS requires explicit user consent
-
-**Keychain Integration:**
-
-- Stores sensitive settings in Chrome's secure storage
-- Encrypted at rest using macOS Keychain
-
-**Notification System:**
-
-- Uses macOS native notifications for critical security alerts
-- Persistent warnings for high-threat sites
-
-### Testing on macOS
-
-To test surveillance protection:
-
-```bash
-# Open test file
-open test_camphish.html
-
-# Or test with real CamPhish
-cd ~/Desktop
-git clone https://github.com/techchipnet/CamPhish
-cd CamPhish
-bash camphish.sh
-```
-## 🎨 Dashboard Overview
-
-### Main Interface
-
-- **Security Status**: Real-time threat level indicator
-- **Risk Score**: 0-100 numerical assessment
-- **HelioAI Analysis**: AI-powered security insights
-- **Quick Stats**: Ads blocked, trackers removed, threats prevented
-
-### Controls
-
-- **Privacy Lockdown**: Toggle for global camera/mic/GPS blocking
-- **Firewall Rules**: Per-domain network policies
-- **Timeline View**: Chronological security events
-- **Export**: Generate forensic reports
-
-### Configuration
-
-- **Threat Detection**: Enable/disable security scanning
-- **Behavior Monitoring**: Track suspicious page activity
-- **Cookie Management**: Auto-decline or block all
-- **Auto-Block**: Automatically block dangerous sites
-
-## 🔧 Technical Details
-
-### Protection Mechanisms
-
-**1. API Override (surveillance_protection.js)**
-
-```javascript
-// Runs in page context before any other scripts
-navigator.mediaDevices.getUserMedia = function() {
-  if (isThreat) throw new DOMException('Blocked by HelioRa');
-  return originalFunction();
-}
-```
-
-**2. Pre-Navigation Blocking (service_worker.js)**
-
-```javascript
-chrome.webNavigation.onBeforeNavigate.addListener(async (details) => {
-  const phishingCheck = await quickPhishingCheck(details.url);
-  if (phishingCheck.confidence >= 80) {
-    // Block and redirect to warning page
-  }
-});
-```
-
-**3. Real-Time Analysis**
-
-- Scans every page on load
-- Checks 10+ threat indicators
-- Calculates risk score
-- Generates AI analysis
-- Updates dashboard
-
-### Performance
-
-- **Memory Usage**: ~20-30MB
-- **CPU Impact**: <1% average
-- **Network Overhead**: Minimal (AI requests cached)
-- **Page Load Impact**: <100ms
-
-## 🧪 Testing
-
-### Test Surveillance Protection
-
-```bash
-# Open local test file
-open test_camphish.html
-
-# Expected: Red warning page with "SURVEILLANCE ATTACK BLOCKED"
-# Camera/GPS requests should be denied
-```
-
-### Test Cookie Blocker
-
-Visit any EU website (e.g., BBC, CNN) - cookie banners should be removed automatically.
-
-### Test Phishing Protection
-
-Visit a suspicious domain with phishing keywords - should show warning before page loads.
-
-## 🐛 Troubleshooting
-
-**Extension not blocking surveillance:**
-
-1. Reload the extension: `chrome://extensions/` → Click refresh
-2. Check console for errors: Right-click popup → Inspect
-3. Verify protection is active: Look for `[HelioRa Surveillance] Protection active` in page console
-
-**AI analysis not showing:**
-
-- Check internet connection
-- Wait 3-5 seconds for AI response
-- Fallback messages appear if API fails
-
-**Cookie banners not removed:**
-
-- Enable "Auto-Decline Cookies" in Config tab
-- Some banners require page reload
-- Try enabling "Block All Cookies" for aggressive removal
-
-## 🤝 Contributing
-
-Contributions are welcome! Please:
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
-## 📄 License
+###  1. Interaction Interception (The "Pause")
+HelioRa injects scripts into the main world context to wrap sensitive browser APIs. When a site attempts a risky action, the extension interrupts the flow and presents a summary of the risk.
+
+*   **Credential/OTP Submission**: Detects input fields resembling OTPs or passwords. If the origin is unknown or suspicious (e.g., an IP address, a tunneling service, or a punycode domain), it interrupts the submit action.
+*   **Hardware Access**: Intercepts `getUserMedia` to prevent drive-by camera/microphone access, especially on sites that haven't established trust.
+*   **Data Exfiltration Monitoring**: Monitors `fetch`, `XHR`, and `Beacon` requests for patterns resembling data theft.
+
+###  2. Heuristic Analysis & NVIDIA AI
+Instead of generic blacklists, the extension combines deterministic heuristics with lightweight AI analysis:
+*   **NVIDIA AI Integration**: Leverages local AI acceleration to analyze page structure and script behavior patterns in real-time without sending data to the cloud.
+*   **Transport Security**: Checks for HTTPS usage and certificate validity.
+*   **Domain Structure**: Flags high-entropy subdomains or known tunneling patterns (often used in phishing campaigns).
+*   **Context Awareness**: Differentiates between a trusted domain (e.g., a known bank) and a generic hosting provider or local file system.
+
+###  3. Forensic Analysis & UI Visualization
+The extension provides a detailed breakdown of *why* a site was flagged, rather than a generic warning.
+*   **Forensic Reports**: Displays a terminal-style analysis log (e.g., "Insecure Transport Protocol," "IDN Homograph Pattern Detected," "High Entropy Subdomain").
+*   **Visual Risk Indicators**: Uses a dynamic "jelly" animation in the popup to visually represent the current threat level (Safe, Suspicious, Dangerous).
+*   **Plain-English Explanations**: Translates technical heuristics into actionable advice (e.g., "Recommendation: Terminate Connection Immediately").
+
+###  4. DOM Stabilization
+Uses `declarativeNetRequest` and content scripts to reduce page noise:
+*   **Ad & Tracker Blocking**: Uses static rules to block common ad networks and tracking pixels.
+*   **Cookie Consent Handling**: Automatically attempts to decline or hide cookie consent popups to prevent them from obstructing content.
+*   **Granular Control**: Users can toggle blocking features (Ads, Trackers, Cookies) independently via the popup.
+
+## Technical Implementation
+
+*   **Manifest V3**: Built on the current Chrome Extension architecture.
+*   **Main World Injection**: Scripts run in the page's execution context to reliably wrap browser APIs before other page scripts load.
+*   **Dynamic Rulesets**: Blocking rules are split into separate JSON files and managed via the `declarativeNetRequest` API, allowing for independent toggling without reloading the extension.
+
+## Installation (Developer Mode)
+
+1.  Clone this repository.
+2.  Open Chrome and navigate to `chrome://extensions/`.
+3.  Enable **Developer mode** (top right).
+4.  Click **Load unpacked** and select the project directory.
+
+## License
 
 MIT License - see [LICENSE](LICENSE) file for details
 
@@ -323,22 +65,14 @@ MIT License - see [LICENSE](LICENSE) file for details
 
 **Anshul Saxena**
 
-*Building the future of browser security, one feature at a time.*
-
----
-
-## 🔗 Links
-
-- **GitHub**: [github.com/AnshulAlgoS/HelioRa](https://github.com/AnshulAlgoS/HelioRa)
-- **Issues**: [Report bugs](https://github.com/AnshulAlgoS/HelioRa/issues)
-- **Email**: anshulsaxena9c6stc@gmail.com
+*Building practical tools for transparency and control.*
 
 ---
 
 <div align="center">
 
-**HelioRa Security** • Real-Time Browser Defense Platform
+**HelioRa**
 
-Made with ❤️ by Anshul Saxena 👩‍💻
+Developed by Anshul Saxena
 
 </div>

@@ -143,22 +143,16 @@ function updateDomainInfo(data) {
     elements.securityStatus.className = `security-status ${config.class}`;
   }
   
-  // Update AI Analysis (only if changed to prevent flickering)
+  // Update AI Analysis 
   if (data.aiAnalysis && data.aiAnalysis !== currentAiAnalysis && elements.aiAnalysis && elements.aiAnalysisText) {
     currentAiAnalysis = data.aiAnalysis;
     
     // Clean up the AI response text
     let analysisText = data.aiAnalysis.trim();
     
-    // Remove any markdown or formatting
+    // Remove any markdown or formatting 
     analysisText = analysisText.replace(/\*\*/g, '');
-    analysisText = analysisText.replace(/\*/g, '');
     analysisText = analysisText.replace(/#{1,6}\s/g, '');
-    
-    // Make it more user-friendly
-    if (analysisText.length > 200) {
-      analysisText = analysisText.substring(0, 200) + '...';
-    }
     
     // Show analysis with animation
     elements.aiAnalysis.style.display = 'block';
@@ -228,6 +222,8 @@ function updateSettingsUI(settings) {
     behaviorDetectionToggle: settings.behaviorDetection,
     firewallToggle: settings.networkFirewall,
     autoBlockToggle: settings.autoBlock,
+    blockAdsToggle: settings.blockAds !== false,
+    blockTrackersToggle: settings.blockTrackers !== false,
     autoCookieDeclineToggle: settings.autoCookieDecline !== false,
     blockCookiesToggle: settings.blockCookies,
     blockThirdPartyCookiesToggle: settings.blockThirdPartyCookies !== false
@@ -529,6 +525,8 @@ Version: ${data.version}
     'behaviorDetectionToggle', 
     'firewallToggle', 
     'autoBlockToggle',
+    'blockAdsToggle',
+    'blockTrackersToggle',
     'autoCookieDeclineToggle',
     'blockCookiesToggle',
     'blockThirdPartyCookiesToggle'
@@ -546,6 +544,8 @@ Version: ${data.version}
           action: 'updateSettings',
           settings: settings
         });
+        
+        showNotification('Setting saved. Reload page to apply.', 'success');
         
         console.log('[HelioRa Popup] Setting updated:', settingName, e.target.checked);
         
