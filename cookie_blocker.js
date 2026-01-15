@@ -1,20 +1,13 @@
-// HelioRa Enhanced Cookie & Popup Blocker
-// Designed to remove visual annoyances, banners, and overlays.
-
 (function() {
   'use strict';
 
-  // Configuration
-  const HELIORA_COOKIE_MAX_RUNTIME = 120000; // 120s limit (extended coverage)
-  const HELIORA_CHECK_INTERVAL = 500; // Check every 500ms
+  // Configuration constants
+  const HELIORA_COOKIE_MAX_RUNTIME = 120000;
+  const HELIORA_CHECK_INTERVAL = 500;
   let startTime = Date.now();
-
-  // Enhanced Blocking: Generic Overlay/Popup/Modal Blocking
-  // We inject CSS to hide common annoyance patterns immediately.
   const style = document.createElement('style');
   style.id = 'heliora-blocking-styles';
   style.textContent = `
-    /* Hiding generic popup/modal/banner classes */
     [class*="popup"], [id*="popup"],
     [class*="modal"], [id*="modal"],
     [class*="overlay"], [id*="overlay"],
@@ -25,11 +18,8 @@
     [class*="offer"], [id*="offer"],
     [class*="promotion"], [id*="promotion"],
     [aria-modal="true"],
-    [role="dialog"] {
-      /* Base styles for potential blocking */
-    }
+    [role="dialog"] {}
     
-    /* Force hide known cookie/consent IDs */
     #onetrust-banner-sdk, #onetrust-consent-sdk,
     #CybotCookiebotDialog,
     #usercentrics-root,
@@ -46,7 +36,6 @@
       z-index: -9999 !important;
     }
     
-    /* Restore scrolling if locked */
     html, body {
       overflow: auto !important;
       position: static !important;
@@ -56,7 +45,6 @@
   if (document.head) {
     document.head.appendChild(style);
   } else {
-    // If head doesn't exist yet (document_start), wait for it
     const observer = new MutationObserver(() => {
       if (document.head) {
         document.head.appendChild(style);
@@ -84,7 +72,6 @@
 
     if (display === 'none' || visibility === 'hidden' || opacity === 0) return false;
 
-    // Aggressive check: Any fixed/sticky element with z-index > 10 is suspect if it covers content
     if (!(pos === 'fixed' || pos === 'sticky' || pos === 'absolute')) return false;
     if (z < 10) return false;
 
@@ -93,9 +80,11 @@
     const cls = (el.className || '').toString().toLowerCase();
     const aria = (el.getAttribute('aria-label') || '').toLowerCase();
 
-    // If it's a small icon or button (e.g. chat widget, back to top), ignore it unless it's an ad
+    // Ignore small UI elements like chat widgets
     const rect = el.getBoundingClientRect();
     if (rect.width < 50 && rect.height < 50) return false;
+
+    if (id.startsWith('heliora-')) return false;
 
     const cookieSignals = [
       'cookie', 'cookies', 'consent', 'gdpr', 'privacy', 'term', 'policy'
@@ -119,14 +108,14 @@
 
     const signal =
       cookieSignals.some(k => text.includes(k) || id.includes(k) || cls.includes(k) || aria.includes(k)) ||
-      popupSignals.some(k => text.includes(k)) || // Text content check is powerful
+      popupSignals.some(k => text.includes(k)) || 
       vendorSignals.some(v => id.includes(v) || cls.includes(v));
 
     const isDialog =
       el.getAttribute('role') === 'dialog' ||
       el.getAttribute('aria-modal') === 'true';
 
-    // Aggressive check: If it's a dialog OR has a signal OR is just a big overlay covering the screen
+    // Check for large overlays covering significant screen area
     const coversScreen = (rect.width > window.innerWidth * 0.8 && rect.height > window.innerHeight * 0.8);
     
     return (signal && (isDialog || z > 10)) || coversScreen;
@@ -135,33 +124,27 @@
   function removePopups() {
     if (Date.now() - startTime > HELIORA_COOKIE_MAX_RUNTIME) return;
 
-    // 1. Scan all elements in body
     const allElements = document.querySelectorAll('body *');
     
     for (let el of allElements) {
       if (isAggressiveFixedPopup(el)) {
         console.log('[HelioRa] Blocking popup:', el);
         
-        // Hide element
         el.style.setProperty('display', 'none', 'important');
         el.style.setProperty('visibility', 'hidden', 'important');
         el.style.setProperty('opacity', '0', 'important');
         el.style.setProperty('pointer-events', 'none', 'important');
         
-        // If it was a modal, we often need to unlock the body scroll
+        // Unlock body scroll if blocked by modal
         document.body.style.setProperty('overflow', 'auto', 'important');
         document.documentElement.style.setProperty('overflow', 'auto', 'important');
       }
     }
-
-    // 2. Handle Shadow DOM (where many modern popups hide)
-    // Skipped deep traversal for performance
   }
 
-  // Run immediately
   removePopups();
 
-  // Run on mutation (dynamic content)
+  // Monitor dynamic content changes
   const observer = new MutationObserver((mutations) => {
     let shouldScan = false;
     for (const m of mutations) {
@@ -178,7 +161,7 @@
     });
   }
 
-  // Periodic cleanup for stubborn popups
+  // Periodic check for stubborn popups
   const interval = setInterval(() => {
     if (Date.now() - startTime > HELIORA_COOKIE_MAX_RUNTIME) {
       clearInterval(interval);
@@ -188,9 +171,9 @@
     removePopups();
   }, HELIORA_CHECK_INTERVAL);
   
-  // Re-trigger on scroll (lazy loaded popups)
+  // Re-check on scroll for lazy-loaded elements
   window.addEventListener('scroll', () => {
-    startTime = Date.now(); // Reset timer on interaction
+    startTime = Date.now(); 
     removePopups();
   }, { passive: true });
 

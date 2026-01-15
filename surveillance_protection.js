@@ -38,11 +38,18 @@ const HARD_BLOCKED_PATTERNS = [
   '127.0.0.1',
   '0.0.0.0',
   '::1',
-  '.ngrok.io',
-  '.ngrok-free.app',
-  '.trycloudflare.com',
-  '.loca.lt',
-  '.localtunnel.me','.serveo.net','.localhost.run','.tunnelto.dev','.pagekite.me', '.tunnel.pyjam.as'
+  'ngrok.io',
+  'ngrok-free.app',
+  'trycloudflare.com',
+  'loca.lt',
+  'localtunnel.me',
+  'serveo.net',
+  'localhost.run',
+  'tunnelto.dev',
+  'pagekite.me',
+  'tunnel.pyjam.as',
+  'thingproxy.freeboard.io',
+  'burpcollaborator.net'
 ];
 
   const TRUSTED_DOMAINS = PRE_VERIFIED_DOMAINS;
@@ -54,7 +61,8 @@ const HARD_BLOCKED_PATTERNS = [
   const SUSPICIOUS_PATTERNS = [
     'festival-wish', 'greeting-card', 
     'camera-test', 'mic-test',
-    'enable-camera', 'enable-mic', 'grant-access'
+    'enable-camera', 'enable-mic', 'grant-access',
+    'camphish', 'ngrok', 'serveo', 'localtunnel'
   ];
 
   // OTP PROTECTION MODULE CONSTANTS 
@@ -115,16 +123,38 @@ const HARD_BLOCKED_PATTERNS = [
   
   // Determine if we should block surveillance APIs
   const SHOULD_BLOCK = isTunnel || ((isSuspicious) && !isTrusted);
+
+  function isUserTrustedDomain() {
+    const entry = trustedSites[domain];
+    return !!(entry && entry.expiry > Date.now());
+  }
+
+  function shouldBlockSensitiveSensors() {
+    return SHOULD_BLOCK || (!isTrusted && !isUserTrustedDomain());
+  }
   
   // Track permission requests for multi-attack detection
   let permissionRequests = new Set();
   let blockCount = 0;
   
+  initProtection();
+
   if (SHOULD_BLOCK) {
     console.log('%c[HelioRa] ⚠️ THREAT DETECTED - Enabling strict protection', 'color: #ff5252; font-weight: bold; font-size: 14px');
     console.log('[HelioRa] Domain:', domain);
     console.log('[HelioRa] Tunnel hosting:', isTunnel);
     console.log('[HelioRa] Suspicious patterns:', isSuspicious);
+
+    const triggerThreatUI = () => {
+      showCriticalWarning(isTunnel ? 'TUNNEL' : 'COMBO');
+      try { window.stop(); } catch(e) {}
+    };
+
+    if (document.body) {
+      triggerThreatUI();
+    } else {
+      document.addEventListener('DOMContentLoaded', triggerThreatUI);
+    }
   }
 
   // otp risk
@@ -618,9 +648,9 @@ function initProtection() {
       const hasVideo = constraints?.video;
       const hasAudio = constraints?.audio;
       
-      if (SHOULD_BLOCK) {
+      if (shouldBlockSensitiveSensors()) {
         logAttempt('getUserMedia', true, { constraints, hasVideo, hasAudio });
-        showWarning(hasVideo && hasAudio ? 'CAMERA & MICROPHONE' : hasVideo ? 'CAMERA' : 'MICROPHONE');
+        showCriticalWarning(isTunnel ? 'TUNNEL' : 'COMBO');
         
         return Promise.reject(new DOMException(
           'Permission denied by HelioRa Security',
@@ -641,9 +671,9 @@ function initProtection() {
         get: desc.get,
         set(value) {
           const isMediaStream = typeof MediaStream !== 'undefined' && value instanceof MediaStream;
-          if (SHOULD_BLOCK && isMediaStream) {
+          if (shouldBlockSensitiveSensors() && isMediaStream) {
             logAttempt('media.srcObject', true, { kind: 'MediaStream' });
-            showWarning('CAMERA');
+            showCriticalWarning(isTunnel ? 'TUNNEL' : 'COMBO');
             throw new DOMException('Media attachment blocked by HelioRa Security', 'NotAllowedError');
           }
           return desc.set.call(this, value);
@@ -654,7 +684,7 @@ function initProtection() {
   if (navigator.mediaDevices?.enumerateDevices) {
     const originalEnumerateDevices = navigator.mediaDevices.enumerateDevices.bind(navigator.mediaDevices);
     navigator.mediaDevices.enumerateDevices = function() {
-      if (SHOULD_BLOCK) {
+      if (shouldBlockSensitiveSensors()) {
         logAttempt('enumerateDevices', true);
         return Promise.resolve([]);
       }
@@ -668,9 +698,9 @@ function initProtection() {
       console.log('[HelioRa] 📹 legacy getUserMedia() called', constraints);
       const hasVideo = constraints?.video;
       const hasAudio = constraints?.audio;
-      if (SHOULD_BLOCK) {
+      if (shouldBlockSensitiveSensors()) {
         logAttempt('getUserMedia(legacy)', true, { constraints, hasVideo, hasAudio });
-        showWarning(hasVideo && hasAudio ? 'CAMERA & MICROPHONE' : hasVideo ? 'CAMERA' : 'MICROPHONE');
+        showCriticalWarning(isTunnel ? 'TUNNEL' : 'COMBO');
         if (typeof errorCb === 'function') {
           errorCb({ code: 1, name: 'NotAllowedError', message: 'Permission denied by HelioRa Security' });
         }
@@ -688,9 +718,9 @@ function initProtection() {
         console.log(`[HelioRa] 📹 ${fn}() called`, constraints);
         const hasVideo = constraints?.video;
         const hasAudio = constraints?.audio;
-        if (SHOULD_BLOCK) {
+        if (shouldBlockSensitiveSensors()) {
           logAttempt(`${fn}`, true, { constraints, hasVideo, hasAudio });
-          showWarning(hasVideo && hasAudio ? 'CAMERA & MICROPHONE' : hasVideo ? 'CAMERA' : 'MICROPHONE');
+          showCriticalWarning(isTunnel ? 'TUNNEL' : 'COMBO');
           if (typeof errorCb === 'function') {
             errorCb({ code: 1, name: 'NotAllowedError', message: 'Permission denied by HelioRa Security' });
           }
@@ -722,7 +752,7 @@ function initProtection() {
           type: 'screen-capture',
           reason: SHOULD_BLOCK ? 'Suspicious site' : 'Untrusted for screen sharing'
         });
-        showWarning('SCREEN CAPTURE');
+        showCriticalWarning(isTunnel ? 'TUNNEL' : 'COMBO');
         
         return Promise.reject(new DOMException(
           'Screen sharing denied by HelioRa Security - untrusted domain',
@@ -790,7 +820,7 @@ function initProtection() {
     navigator.geolocation.getCurrentPosition = function(success, error, options) {
       console.log('[HelioRa] 📍 getCurrentPosition() called', options);
       
-      if (SHOULD_BLOCK) {
+      if (shouldBlockSensitiveSensors()) {
         logAttempt('geolocation', true, { method: 'getCurrentPosition' });
         
         if (error) {
@@ -1376,6 +1406,7 @@ function initProtection() {
   }
 
   function showWarning(type) {
+    return;
 
     if (document.getElementById('heliora-surveillance-warning')) {
       return;
@@ -1798,62 +1829,422 @@ function initProtection() {
 
   }
   
-  function showCriticalWarning() {
-    if (document.getElementById('heliora-critical-warning')) {
-      return;
-    }
-    
+  function showCriticalWarning(type = 'COMBO') {
+    if (document.getElementById('heliora-critical-warning')) return;
+
     const overlay = document.createElement('div');
     overlay.id = 'heliora-critical-warning';
-    overlay.style.cssText = `
-      position: fixed !important;
-      top: 0 !important;
-      left: 0 !important;
-      width: 100% !important;
-      height: 100% !important;
-      background: rgba(139, 0, 0, 0.98) !important;
-      color: white !important;
-      z-index: 2147483647 !important;
-      display: flex !important;
-      align-items: center !important;
-      justify-content: center !important;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
-    `;
     
+    let title = 'Surveillance Attack Prevented';
+    let subtitle = 'HelioRa Security has intercepted a high-risk connection attempt.';
+    let threatTypeLabel = 'Surveillance Attack';
+    let messageContent = 'This website is attempting to activate multiple surveillance permissions simultaneously.';
+    let subtext = 'Requested: Camera + GPS + Fullscreen + Notifications';
+    
+    if (type === 'TUNNEL') {
+      title = 'CamPhish Tunnel Blocked';
+      subtitle = 'HelioRa detected a known CamPhish hosting pattern.';
+      threatTypeLabel = 'Tunnel Hosting (CamPhish)';
+      messageContent = 'This website is hosted on a temporary tunneling service used by attackers.';
+      subtext = 'Attackers use these ephemeral domains to bypass filters and steal camera/location data.';
+    }
+
+    const domain = window.location.hostname;
+
     overlay.innerHTML = `
-      <div style="text-align: center; padding: 40px;">
-        <h1 style="font-size: 56px; margin-bottom: 20px; color: #ff5252; font-weight: 900;">
-          🚨 CRITICAL THREAT
-        </h1>
-        <p style="font-size: 22px; margin-bottom: 30px; line-height: 1.5;">
-          This website attempted to activate multiple surveillance APIs simultaneously
-        </p>
-        <div style="font-size: 18px; margin-bottom: 20px; color: #ffeb3b; background: rgba(0,0,0,0.4); padding: 20px; border-radius: 12px; display: inline-block;">
-          <strong>Attempted access:</strong><br>
-          ${Array.from(permissionRequests).join(' + ').toUpperCase()}
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        
+        #heliora-critical-warning {
+          position: fixed !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100vw !important;
+          height: 100vh !important;
+          background-color: #050505 !important;
+          color: #FFD700 !important;
+          z-index: 2147483647 !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+          overflow: hidden !important;
+        }
+
+        #heliora-jelly-container {
+          position: absolute !important;
+          top: 0 !important;
+          left: 0 !important;
+          width: 100% !important;
+          height: 100% !important;
+          z-index: 1 !important;
+          pointer-events: none !important;
+        }
+
+        .heliora-jelly-wrapper {
+          position: absolute !important;
+          pointer-events: auto !important;
+          transition: transform 0.1s ease-out !important; 
+        }
+
+        .heliora-jelly-blob {
+          width: 100% !important;
+          height: 100% !important;
+          background: rgba(255, 215, 0, 0.03) !important;
+          border: 1px solid rgba(255, 215, 0, 0.15) !important;
+          box-shadow: 0 0 30px rgba(255, 215, 0, 0.05) !important;
+          backdrop-filter: blur(8px) !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          transition: all 0.3s ease !important;
+          overflow: hidden !important;
+        }
+        
+        .heliora-jelly-blob::after {
+            content: '' !important;
+            position: absolute !important;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1), transparent 60%) !important;
+            border-radius: inherit !important;
+            pointer-events: none !important;
+        }
+
+        .heliora-jelly-blob svg {
+          width: 40% !important;
+          height: 40% !important;
+          opacity: 0.5 !important;
+          transition: all 0.3s ease !important;
+          filter: drop-shadow(0 0 10px rgba(255,215,0,0.3)) !important;
+        }
+
+        .heliora-jelly-wrapper:hover .heliora-jelly-blob {
+            background: rgba(255, 215, 0, 0.08) !important;
+            border-color: rgba(255, 215, 0, 0.4) !important;
+            box-shadow: 
+              0 0 50px rgba(255, 215, 0, 0.15),
+              inset 0 0 30px rgba(255, 215, 0, 0.1) !important;
+        }
+
+        .heliora-jelly-wrapper:hover .heliora-jelly-blob svg {
+          opacity: 0.8 !important;
+          transform: scale(1.1) !important;
+          filter: drop-shadow(0 0 15px rgba(255,215,0,0.6)) !important;
+        }
+
+        /* Specific Shapes */
+        #jelly-cam {
+          top: 15%; left: 10%; width: 280px; height: 280px;
+          animation: float-1 12s infinite ease-in-out alternate;
+        }
+        #jelly-cam .heliora-jelly-blob { border-radius: 45% 55% 70% 30% / 30% 30% 70% 70%; }
+
+        #jelly-mic {
+          bottom: 15%; right: 15%; width: 320px; height: 320px;
+          animation: float-2 15s infinite ease-in-out alternate;
+        }
+        #jelly-mic .heliora-jelly-blob { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+
+        #jelly-eye {
+          top: 20%; right: 20%; width: 240px; height: 240px;
+          animation: float-3 10s infinite ease-in-out alternate;
+        }
+        #jelly-eye .heliora-jelly-blob { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
+        
+        #jelly-lock {
+          bottom: 25%; left: 25%; width: 200px; height: 200px;
+          animation: float-4 18s infinite ease-in-out alternate;
+        }
+        #jelly-lock .heliora-jelly-blob { border-radius: 50% 50% 20% 80% / 25% 80% 20% 75%; }
+
+        @keyframes float-1 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, 50px) rotate(5deg); } }
+        @keyframes float-2 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, -30px) rotate(-5deg); } }
+        @keyframes float-3 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 40px) rotate(8deg); } }
+        @keyframes float-4 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(40px, -40px) rotate(-8deg); } }
+
+        /* Card Styles */
+        .heliora-card {
+          background: rgba(20, 20, 20, 0.85) !important;
+          border: 1px solid rgba(255, 215, 0, 0.2) !important;
+          border-radius: 24px !important;
+          padding: 48px !important;
+          max-width: 550px !important;
+          width: 90% !important;
+          box-shadow: 
+            0 25px 50px -12px rgba(0, 0, 0, 0.8),
+            0 0 0 1px rgba(255, 215, 0, 0.1) !important;
+          text-align: center !important;
+          position: relative !important;
+          backdrop-filter: blur(20px) !important;
+          animation: heliora-slide-up 0.4s ease-out !important;
+          z-index: 10 !important;
+        }
+
+        @keyframes heliora-slide-up {
+          from { opacity: 0; transform: translateY(20px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+
+        .heliora-card::before {
+          content: '' !important;
+          position: absolute !important;
+          top: 0 !important; left: 0 !important; right: 0 !important;
+          height: 3px !important;
+          background: linear-gradient(90deg, #FFD700, #FFA000) !important;
+          box-shadow: 0 0 15px rgba(255, 215, 0, 0.5) !important;
+        }
+
+        .heliora-icon-wrapper {
+          width: 80px !important;
+          height: 80px !important;
+          background: rgba(255, 215, 0, 0.1) !important;
+          border-radius: 50% !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          margin: 0 auto 24px auto !important;
+          border: 1px solid rgba(255, 215, 0, 0.3) !important;
+          animation: heliora-pulse-yellow 2s infinite !important;
+        }
+
+        @keyframes heliora-pulse-yellow {
+          0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+          70% { box-shadow: 0 0 0 15px rgba(255, 215, 0, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+        }
+
+        .heliora-title {
+          font-size: 32px !important;
+          font-weight: 800 !important;
+          margin: 0 0 12px 0 !important;
+          color: #FFD700 !important;
+          letter-spacing: -0.02em !important;
+          line-height: 1.2 !important;
+          text-transform: uppercase !important;
+        }
+
+        .heliora-subtitle {
+          font-size: 16px !important;
+          color: #cccccc !important;
+          margin-bottom: 32px !important;
+          line-height: 1.5 !important;
+        }
+
+        .heliora-details-grid {
+          display: grid !important;
+          grid-template-columns: 1fr !important;
+          gap: 12px !important;
+          background: rgba(255, 255, 255, 0.03) !important;
+          padding: 20px !important;
+          border-radius: 16px !important;
+          margin-bottom: 32px !important;
+          border: 1px solid rgba(255, 215, 0, 0.1) !important;
+          text-align: left !important;
+        }
+
+        .heliora-detail-row {
+          display: flex !important;
+          justify-content: space-between !important;
+          align-items: center !important;
+          padding: 8px 0 !important;
+          border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+        }
+        .heliora-detail-row:last-child { border-bottom: none !important; }
+
+        .heliora-label {
+          color: #888888 !important;
+          font-size: 14px !important;
+          font-weight: 500 !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.05em !important;
+        }
+
+        .heliora-value {
+          color: #ffffff !important;
+          font-size: 14px !important;
+          font-weight: 600 !important;
+          font-family: monospace !important;
+          max-width: 250px !important;
+          white-space: nowrap !important;
+          overflow: hidden !important;
+          text-overflow: ellipsis !important;
+          text-align: right !important;
+        }
+
+        .heliora-value.danger {
+          color: #FFD700 !important;
+          background: rgba(255, 215, 0, 0.15) !important;
+          padding: 4px 10px !important;
+          border-radius: 6px !important;
+          display: inline-block !important;
+          border: 1px solid rgba(255, 215, 0, 0.2) !important;
+        }
+
+        .heliora-message {
+          background: rgba(255, 215, 0, 0.05) !important;
+          border-left: 4px solid #FFD700 !important;
+          padding: 16px !important;
+          text-align: left !important;
+          border-radius: 0 8px 8px 0 !important;
+          margin-bottom: 32px !important;
+          color: #dddddd !important;
+          font-size: 14px !important;
+          line-height: 1.6 !important;
+        }
+        
+        .heliora-message strong { color: #FFD700 !important; }
+
+        .heliora-actions {
+          display: flex !important;
+          gap: 16px !important;
+          justify-content: center !important;
+        }
+
+        .heliora-btn {
+          padding: 14px 28px !important;
+          border-radius: 12px !important;
+          font-weight: 700 !important;
+          font-size: 15px !important;
+          cursor: pointer !important;
+          transition: all 0.2s ease !important;
+          border: none !important;
+          outline: none !important;
+          text-transform: uppercase !important;
+          letter-spacing: 0.05em !important;
+        }
+
+        .heliora-btn-primary {
+          background: #FFD700 !important;
+          color: #000000 !important;
+          box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3) !important;
+        }
+        .heliora-btn-primary:hover {
+          background: #ffea00 !important;
+          transform: translateY(-2px) !important;
+          box-shadow: 0 6px 16px rgba(255, 215, 0, 0.5) !important;
+        }
+
+        .heliora-btn-secondary {
+          background: transparent !important;
+          color: #FFD700 !important;
+          border: 1px solid rgba(255, 215, 0, 0.3) !important;
+        }
+        .heliora-btn-secondary:hover {
+          background: rgba(255, 215, 0, 0.1) !important;
+          transform: translateY(-2px) !important;
+          border-color: #FFD700 !important;
+        }
+
+        .heliora-footer {
+          margin-top: 24px !important;
+          font-size: 12px !important;
+          color: #666666 !important;
+          font-weight: 500 !important;
+          opacity: 0.8 !important;
+        }
+      </style>
+      
+      <div id="heliora-jelly-container">
+        <!-- Camera Jelly -->
+        <div id="jelly-cam" class="heliora-jelly-wrapper" data-speed="0.08">
+           <div class="heliora-jelly-blob">
+             <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+               <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+               <circle cx="12" cy="13" r="4"></circle>
+             </svg>
+           </div>
         </div>
-        <p style="font-size: 16px; margin-bottom: 40px; max-width: 600px; margin-left: auto; margin-right: auto; line-height: 1.6;">
-          This is a known CamPhish attack pattern. Your camera, microphone, location, and screen may have been targets.
-        </p>
-        <button onclick="window.close()" style="
-          background: white;
-          color: darkred;
-          border: none;
-          padding: 18px 48px;
-          font-size: 20px;
-          border-radius: 12px;
-          cursor: pointer;
-          font-weight: 900;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.5);
-        ">CLOSE TAB IMMEDIATELY</button>
-        <div style="margin-top: 40px; font-size: 13px; color: rgba(255,255,255,0.7);">
-          Protected by <strong>HelioRa Security Platform</strong>
+
+        <!-- Mic Jelly -->
+        <div id="jelly-mic" class="heliora-jelly-wrapper" data-speed="0.12">
+           <div class="heliora-jelly-blob">
+             <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+               <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+               <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+               <line x1="12" y1="19" x2="12" y2="23"></line>
+               <line x1="8" y1="23" x2="16" y2="23"></line>
+             </svg>
+           </div>
+        </div>
+
+        <!-- Eye Jelly -->
+        <div id="jelly-eye" class="heliora-jelly-wrapper" data-speed="0.10">
+           <div class="heliora-jelly-blob">
+             <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+               <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+               <circle cx="12" cy="12" r="3"></circle>
+             </svg>
+           </div>
+        </div>
+
+        <!-- Lock Jelly -->
+        <div id="jelly-lock" class="heliora-jelly-wrapper" data-speed="0.06">
+           <div class="heliora-jelly-blob">
+             <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+               <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+               <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+             </svg>
+           </div>
+        </div>
+      </div>
+
+      <div class="heliora-card">
+        <div class="heliora-icon-wrapper">
+          <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M12 8v4"/>
+            <path d="M12 16h.01"/>
+          </svg>
+        </div>
+
+        <h1 class="heliora-title">${title}</h1>
+        <p class="heliora-subtitle">${subtitle}</p>
+
+        <div class="heliora-details-grid">
+          <div class="heliora-detail-row">
+            <span class="heliora-label">Domain</span>
+            <span class="heliora-value" title="${domain}">${domain}</span>
+          </div>
+          <div class="heliora-detail-row">
+            <span class="heliora-label">Threat Type</span>
+            <span class="heliora-value danger">${threatTypeLabel}</span>
+          </div>
+          <div class="heliora-detail-row">
+            <span class="heliora-label">Protection Level</span>
+            <span class="heliora-value" style="color: #4ade80 !important; text-shadow: 0 0 10px rgba(74, 222, 128, 0.3) !important;">MAXIMUM</span>
+          </div>
+        </div>
+
+        <div class="heliora-message">
+          <strong>⚠️ What was blocked:</strong><br>
+          ${messageContent}<br>
+          <span style="font-size: 13px; color: #aaa; margin-top: 5px; display: block;">${subtext}</span>
+        </div>
+
+        <div class="heliora-actions">
+          <button id="heliora_kill_tab" class="heliora-btn heliora-btn-primary">CLOSE TAB</button>
+          <button id="heliora_back_btn" class="heliora-btn heliora-btn-secondary">GO BACK</button>
+        </div>
+
+        <div class="heliora-footer">
+          Protected by HelioRa Security • Advanced Surveillance Defense
         </div>
       </div>
     `;
-    
+
     document.body.innerHTML = '';
     document.body.appendChild(overlay);
+    
+    initHelioRaJellyAnimation();
+    
+    document.getElementById('heliora_kill_tab').addEventListener('click', () => {
+        window.close();
+        window.location.href = "about:blank";
+    });
+    
+    document.getElementById('heliora_back_btn').addEventListener('click', () => {
+        window.history.back();
+    });
   }
   
 

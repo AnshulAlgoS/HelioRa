@@ -2,6 +2,17 @@
 
 console.log('[HelioRa Fraud Detector] Initializing advanced fraud detection...');
 
+const PRE_VERIFIED_DOMAINS = [
+  'google.com', 'microsoft.com', 'github.com', 'aws.amazon.com',
+  'hdfcbank.com', 'icicibank.com', 'sbi.co.in', 'paytm.com', 'phonepe.com',
+  'paypal.com', 'stripe.com', 'razorpay.com',
+  'okta.com', 'auth0.com',
+  'facebook.com', 'twitter.com', 'linkedin.com',
+  'amazon.com', 'flipkart.com',
+  'reuters.com', 'theguardian.com', 'bbc.com', 'cnn.com', 'nytimes.com',
+  'zoom.us', 'teams.microsoft.com', 'discord.com', 'slack.com'
+];
+
 class AdvancedFraudDetector {
   constructor() {
     this.domain = window.location.hostname.replace('www.', '');
@@ -45,27 +56,18 @@ class AdvancedFraudDetector {
   }
 
   startDetection() {
-    // Listen for Main World signals (Evilginx detection)
     document.addEventListener('HelioRaMainWorldSignal', (e) => this.handleMainWorldSignal(e));
-
-    // 1. Detect OTP Fields (Behavioral)
     this.detectOTPFields();
-    
-    // 2. Calculate Contextual Trust Score
     this.calculateRiskScore();
-    
-    // 3. Run other detectors
     this.detectFakeBrand();
     this.monitorUPIRedirects();
     this.detectScamPopups();
     this.detectSuspiciousIframes();
     
-    // 4. Handle OTP Risk
     if (this.otpInputs.length > 0) {
       this.handleOTPRisk();
     }
     
-    // Report findings
     setTimeout(() => this.reportFindings(), 2000);
   }
 
@@ -88,33 +90,27 @@ class AdvancedFraudDetector {
     
     if (riskIncrease > 0) {
       this.evilginxRisk += riskIncrease;
-      this.calculateRiskScore(); // Recalculate and trigger warnings if needed
+      this.calculateRiskScore();
       this.handleOTPRisk();
     }
   }
 
-  /**
-   * 1. Behavioral OTP Detection
-   * Analyzes input fields for OTP-like characteristics without relying solely on keywords.
-   */
+  // Analyzes input fields for OTP-like characteristics without relying solely on keywords
   detectOTPFields() {
     const inputs = document.querySelectorAll('input');
     this.otpInputs = [];
     
     inputs.forEach(input => {
-      // Check for specific attributes
       const isNumeric = input.inputMode === 'numeric' || input.type === 'number' || input.pattern === '[0-9]*';
       const isOneTime = input.autocomplete === 'one-time-code';
       const hasLength = input.maxLength >= 4 && input.maxLength <= 8;
       const nameMatch = /otp|code|pin|verification/i.test(input.name || input.id || '');
       
-      // Strong signal: explicit autocomplete
       if (isOneTime) {
         this.otpInputs.push(input);
         return;
       }
       
-      // Behavioral signal: Numeric + Length constraint + Name hint
       if (isNumeric && hasLength && nameMatch) {
         this.otpInputs.push(input);
       }
@@ -125,27 +121,19 @@ class AdvancedFraudDetector {
     }
   }
 
-  /**
-   * 2. Contextual Trust Scoring
-   * Calculates a risk score based on domain, page content, and browser behavior.
-   */
   calculateRiskScore() {
     let domainRisk = this.checkDomainRisk();
     let pageMimicry = this.checkPageMimicry();
     let browserBehavior = this.checkBrowserBehavior();
-    let networkRisk = 0; // Will be updated by main world events if possible, but we calculate static signals here
+    let networkRisk = 0;
     
-    // Zero-touch signals (from existing checks)
     if (this.detectedThreats.some(t => t.includes('UPI') || t.includes('Exfiltration'))) {
       networkRisk += 20;
     }
 
     this.otpRiskScore = domainRisk + pageMimicry + browserBehavior + networkRisk + this.evilginxRisk;
-    
-    // Cap at 100
     this.otpRiskScore = Math.min(100, this.otpRiskScore);
     
-    // Dispatch to Main World for Fetch Interception
     document.dispatchEvent(new CustomEvent('HelioRaRiskUpdate', {
       detail: { riskScore: this.otpRiskScore }
     }));
@@ -157,18 +145,14 @@ class AdvancedFraudDetector {
     let risk = 0;
     const domain = this.domain.toLowerCase();
     
-    // Free TLDs
     const freeTLDs = ['.tk', '.ml', '.cf', '.ga', '.gq'];
     if (freeTLDs.some(tld => domain.endsWith(tld))) risk += 30;
     
-    // IP-based domain
     if (/^\d{1,3}(\.\d{1,3}){3}$/.test(domain)) risk += 35;
     
-    // Temporary hosting patterns
     const tempHosts = ['ngrok', 'vercel.app', 'netlify.app', 'herokuapp.com', 'glitch.me', 'surge.sh'];
     if (tempHosts.some(host => domain.includes(host))) risk += 25;
     
-    // Punycode (xn--)
     if (domain.startsWith('xn--')) risk += 20;
     
     return risk;
@@ -177,17 +161,11 @@ class AdvancedFraudDetector {
   checkPageMimicry() {
     let risk = 0;
     
-    // Inline Base64 images (common in phishing kits)
     const images = document.querySelectorAll('img[src^="data:image"]');
     if (images.length > 3) risk += 10;
     
-    // Missing privacy policy
     const bodyText = document.body.innerText.toLowerCase();
     if (!bodyText.includes('privacy policy') && !bodyText.includes('terms')) risk += 10;
-    
-    // Brand mismatch (using existing logic)
-    // If detectFakeBrand() found something, it adds to fraudScore, let's tap into that logic
-    // We'll do a quick check here
     const title = document.title.toLowerCase();
     if (title.includes('login') || title.includes('sign in')) {
       if (!window.location.protocol.startsWith('https')) risk += 20;
@@ -199,33 +177,46 @@ class AdvancedFraudDetector {
   checkBrowserBehavior() {
     let risk = 0;
     
-    // Fullscreen on load (suspicious for login pages)
     if (document.fullscreenElement) risk += 15;
     
-    // Hidden iframes (from existing check)
     const hiddenIframes = document.querySelectorAll('iframe[style*="display: none"], iframe[style*="visibility: hidden"]');
     if (hiddenIframes.length > 0) risk += 15;
     
     return risk;
   }
 
-  /**
-   * 3. Risk Handling
-   * Determines actions based on the calculated risk score.
-   */
+  // Determines actions based on the calculated risk score
+  isTrustedEnvironment() {
+    const host = this.domain.toLowerCase();
+    const inPreVerified = PRE_VERIFIED_DOMAINS.some(d => host === d || host.endsWith('.' + d));
+    const inLegitBrand = Object.values(this.legitimateBrands).some(data =>
+      data.domains.some(d => host === d || host.endsWith('.' + d))
+    );
+    return inPreVerified || inLegitBrand;
+  }
+
   handleOTPRisk() {
     if (this.otpRiskScore < 40) {
-      // Allow silently
+      return;
+    }
+
+    const trustedEnv = this.isTrustedEnvironment();
+    const hasThreats = this.detectedThreats.length > 0;
+    const hasOtpContext = this.otpInputs.length > 0;
+
+    if (!hasThreats && !hasOtpContext) {
+      return;
+    }
+
+    if (trustedEnv && !hasThreats) {
       return;
     }
     
     if (this.otpRiskScore >= 40 && this.otpRiskScore < 70) {
-      // WARN USER
       this.showOTPWarning("Suspicious Authentication Request");
     }
     
     if (this.otpRiskScore >= 70) {
-      // HARD BLOCK
       this.freezeOTPInputs();
       this.showOTPWarning("High-Risk Authentication Blocked");
     }
@@ -238,7 +229,6 @@ class AdvancedFraudDetector {
       input.style.border = '2px solid #f44336';
       input.placeholder = "Blocked by HelioRa";
       
-      // Prevent paste
       input.addEventListener('paste', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -290,12 +280,10 @@ class AdvancedFraudDetector {
     
     document.body.appendChild(div);
     
-    // Add slide-in animation
     const style = document.createElement('style');
     style.textContent = `@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }`;
     document.head.appendChild(style);
     
-    // Handlers
     setTimeout(() => {
         const btn = document.getElementById('heliora-ignore');
         if (btn) btn.onclick = () => div.remove();
@@ -317,12 +305,7 @@ class AdvancedFraudDetector {
     return reasons.length ? "Reasons: " + reasons.join(", ") : "Reason: Generic Risk Pattern";
   }
 
-  /**
-   * Legacy Methods
-   * Maintained for backward compatibility with older detection logic.
-   */
   detectFakeBrand() {
-    // Simplified logic to avoid duplication
     const domain = this.domain;
     for (const [brand, data] of Object.entries(this.legitimateBrands)) {
       if (document.title.toLowerCase().includes(brand) && !data.domains.some(d => domain.includes(d))) {
@@ -336,11 +319,10 @@ class AdvancedFraudDetector {
     const links = document.querySelectorAll('a[href^="upi://"]');
     if (links.length > 0) {
       console.log('[HelioRa] UPI links detected');
-      // If risky domain, flag it
       if (this.otpRiskScore > 30) {
         this.detectedThreats.push('Risky UPI Link');
-        this.otpRiskScore += 20; // Increase risk
-        this.handleOTPRisk(); // Re-evaluate
+        this.otpRiskScore += 20;
+        this.handleOTPRisk();
       }
     }
   }
@@ -360,5 +342,4 @@ class AdvancedFraudDetector {
   }
 }
 
-// Initialize
 new AdvancedFraudDetector();

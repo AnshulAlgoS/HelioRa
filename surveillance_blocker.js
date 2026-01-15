@@ -7,7 +7,6 @@ const permissionLog = [];
 
 // Detect CamPhish-style attack patterns
 const ATTACK_PATTERNS = {
-  // Fake phishing & scam live page patterns 
   fakeLivePages: [
     'festival', 'wish', 'greeting', 'celebration',
     'youtube.*live', 'live.*stream', 'watch.*live',
@@ -15,7 +14,6 @@ const ATTACK_PATTERNS = {
     'verify.*account', 'secure.*account'
   ],
 
-  // Tunnel hosting services
   tunnelDomains: [
     'ngrok.io', 'ngrok-free.app', 'loca.lt', 'localhost.run',
     'trycloudflare.com', '*.trycloudflare.com',
@@ -25,7 +23,6 @@ const ATTACK_PATTERNS = {
     'localhost', '127.0.0.1', '0.0.0.0'
   ],
 
-  // Suspicious URL patterns 
   suspiciousPatterns: [
     /camera.*access|access.*camera/i,
     /enable.*webcam|webcam.*enable/i,
@@ -35,27 +32,23 @@ const ATTACK_PATTERNS = {
     /grant.*permission|permission.*grant/i
   ],
 
-  // Truly dangerous permission combination
   dangerousCombo: ['camera', 'geolocation', 'notifications', 'fullscreen']
 };
-
 
 // Global privacy lockdown state
 let privacyLockdown = false;
 
-// Trusted domains (won't block permissions)
+// Trusted domains that won't trigger blocks
 const TRUSTED_DOMAINS = [
   'meet.google.com', 'zoom.us', 'teams.microsoft.com',
   'discord.com', 'slack.com', 'webex.com',
   'whereby.com', 'jitsi.org'
 ];
 
-// Check if domain is trusted
 function isTrustedDomain(domain) {
   return TRUSTED_DOMAINS.some(trusted => domain.includes(trusted));
 }
 
-// Check if domain is a tunnel service
 function isTunnelDomain(domain) {
   return ATTACK_PATTERNS.tunnelDomains.some(tunnel => {
     if (tunnel.startsWith('*.')) {
@@ -66,11 +59,10 @@ function isTunnelDomain(domain) {
   });
 }
 
-// Check for fake live page patterns
 function isFakeLivePage() {
   const url = window.location.href.toLowerCase();
   const title = document.title.toLowerCase();
-  const bodyText = document.body.innerText.toLowerCase();
+  const bodyText = document.body ? document.body.innerText.toLowerCase() : '';
 
   return ATTACK_PATTERNS.fakeLivePages.some(pattern => {
     const regex = new RegExp(pattern, 'i');
@@ -78,13 +70,12 @@ function isFakeLivePage() {
   });
 }
 
-// Check for suspicious URL patterns
 function hasSuspiciousPattern() {
   const url = window.location.href;
   return ATTACK_PATTERNS.suspiciousPatterns.some(pattern => pattern.test(url));
 }
 
-// Detect redirect chains (phishing trap indicator)
+// Detect suspicious redirect chains
 function detectRedirectChain() {
   const referrer = document.referrer;
   const currentUrl = window.location.href;
@@ -96,49 +87,43 @@ function detectRedirectChain() {
   return false;
 }
 
-// Calculate threat score
+// Calculate comprehensive threat score based on domain and behavior
 function calculateThreatScore() {
   let score = 0;
   const domain = window.location.hostname;
 
-  // Tunnel domain = HIGH RISK
   if (isTunnelDomain(domain)) {
     score += 70;
     console.log('[HelioRa Surveillance] THREAT: Tunnel domain detected');
   }
 
-  // Fake live page = HIGH RISK
   if (isFakeLivePage()) {
     score += 60;
     console.log('[HelioRa Surveillance] THREAT: Fake live page pattern detected');
   }
 
-  // Suspicious URL pattern
   if (hasSuspiciousPattern()) {
     score += 40;
     console.log('[HelioRa Surveillance] THREAT: Suspicious URL pattern');
   }
 
-  // Redirect chain = MEDIUM RISK
   if (detectRedirectChain()) {
     score += 30;
     console.log('[HelioRa Surveillance] THREAT: Redirect chain detected');
   }
 
-  // New/unknown domain (not in history)
-const domainAge = sessionStorage.getItem('domain_first_visit_' + domain);
+  const domainAge = sessionStorage.getItem('domain_first_visit_' + domain);
 
-if (!domainAge && isTunnelDomain(domain)) {
-  score += 20;
-  sessionStorage.setItem('domain_first_visit_' + domain, Date.now());
-  console.log('[HelioRa Surveillance] THREAT: New tunnel domain detected');
-}
-
+  if (!domainAge && isTunnelDomain(domain)) {
+    score += 20;
+    sessionStorage.setItem('domain_first_visit_' + domain, Date.now());
+    console.log('[HelioRa Surveillance] THREAT: New tunnel domain detected');
+  }
 
   return Math.min(score, 100);
 }
 
-// Override navigator.mediaDevices.getUserMedia (camera/mic access)
+// Override navigator.mediaDevices.getUserMedia for surveillance protection
 if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
 
@@ -151,7 +136,6 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
     console.log('[HelioRa Surveillance] Constraints:', constraints);
     console.log('[HelioRa Surveillance] Threat Score:', threatScore);
 
-    // Log for forensics
     const logEntry = {
       type: 'getUserMedia',
       domain: domain,
@@ -163,21 +147,17 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       blocked: false
     };
 
-    // Check if should block
     let shouldBlock = false;
     let blockReason = '';
 
-    // Privacy lockdown mode - block everything
     if (privacyLockdown) {
       shouldBlock = true;
       blockReason = 'Privacy lockdown mode enabled';
     }
-    // High threat score
     else if (threatScore >= 60) {
       shouldBlock = true;
       blockReason = 'High threat score: ' + threatScore;
     }
-    // Untrusted domain
     else if (!isTrustedDomain(domain) && threatScore >= 60) {
       shouldBlock = true;
       blockReason = 'Untrusted + High Threat';
@@ -188,20 +168,16 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
       logEntry.blockReason = blockReason;
       permissionLog.push(logEntry);
 
-      // Send to background for logging
       chrome.runtime.sendMessage({
         action: 'logSurveillanceAttempt',
         data: logEntry
       });
 
-      // Show warning
       showSurveillanceWarning(constraints, blockReason, threatScore);
 
-      // Throw error to block access
       throw new DOMException('Permission denied by HelioRa Security', 'NotAllowedError');
     }
 
-    // Allow but log
     logEntry.blocked = false;
     logEntry.blockReason = 'Trusted domain';
     permissionLog.push(logEntry);
@@ -215,7 +191,7 @@ if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
   };
 }
 
-// Override navigator.geolocation.getCurrentPosition (GPS access)
+// Override navigator.geolocation.getCurrentPosition
 if (navigator.geolocation) {
   const originalGetCurrentPosition = navigator.geolocation.getCurrentPosition.bind(navigator.geolocation);
   const originalWatchPosition = navigator.geolocation.watchPosition.bind(navigator.geolocation);
@@ -282,12 +258,11 @@ if (navigator.geolocation) {
   };
 
   navigator.geolocation.watchPosition = function (success, error, options) {
-    // Same logic as getCurrentPosition
     return navigator.geolocation.getCurrentPosition(success, error, options);
   };
 }
 
-// Override Notification.requestPermission (notification spam)
+// Override Notification.requestPermission
 if (window.Notification) {
   const originalRequestPermission = Notification.requestPermission.bind(Notification);
 
@@ -312,7 +287,6 @@ let requestedPermissions = new Set();
 function trackPermissionRequest(type) {
   requestedPermissions.add(type);
 
-  // Check if dangerous combo is being requested
   const hasDangerousCombo = ATTACK_PATTERNS.dangerousCombo.every(perm =>
     requestedPermissions.has(perm)
   );
@@ -335,7 +309,7 @@ function trackPermissionRequest(type) {
   }
 }
 
-// Monitor fullscreen requests (used in combination with camera)
+// Monitor fullscreen requests
 document.addEventListener('fullscreenchange', () => {
   if (document.fullscreenElement) {
     console.log('[HelioRa Surveillance] Fullscreen mode activated');
@@ -343,7 +317,6 @@ document.addEventListener('fullscreenchange', () => {
   }
 });
 
-// Show surveillance warning overlay
 function showSurveillanceWarning(constraints, reason, threatScore) {
   const warning = document.createElement('div');
   warning.id = 'heliora-surveillance-warning';
@@ -417,53 +390,462 @@ function showSurveillanceWarning(constraints, reason, threatScore) {
   });
 }
 
-// Show critical warning for dangerous permission combinations
-function showCriticalWarning() {
-  const warning = document.createElement('div');
-  warning.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(139, 0, 0, 0.98);
-    color: white;
-    z-index: 2147483647;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  `;
+function initHelioRaJellyAnimation() {
+  const container = document.getElementById('heliora-jelly-container');
+  const wrappers = document.querySelectorAll('.heliora-jelly-wrapper');
+  
+  if (!container || !wrappers.length) return;
 
-  warning.innerHTML = `
-    <div style="text-align: center; padding: 40px;">
-      <h1 style="font-size: 48px; margin-bottom: 20px; color: #ff5252;">
-        CRITICAL SURVEILLANCE THREAT
-      </h1>
-      <p style="font-size: 20px; margin-bottom: 30px;">
-        This website is attempting to activate multiple surveillance permissions simultaneously.
-      </p>
-      <p style="font-size: 18px; margin-bottom: 20px; color: #ffeb3b;">
-        Requested: Camera + GPS + Fullscreen + Notifications
-      </p>
-      <p style="font-size: 16px; margin-bottom: 30px;">
-        This is a known attack pattern used by CamPhish and similar surveillance tools.
-      </p>
-      <button onclick="window.close()" style="
-        background: white;
-        color: darkred;
-        border: none;
-        padding: 15px 40px;
-        font-size: 18px;
-        border-radius: 8px;
-        cursor: pointer;
-        font-weight: bold;
-      ">CLOSE TAB IMMEDIATELY</button>
+  const controller = new AbortController();
+  const { signal } = controller;
+
+  window.addEventListener('mousemove', (e) => {
+    const mx = e.clientX;
+    const my = e.clientY;
+
+    wrappers.forEach(wrapper => {
+      const blob = wrapper.querySelector('.heliora-jelly-blob');
+      if (!blob) return;
+      
+      const speed = parseFloat(wrapper.dataset.speed) || 0.1;
+      
+      const rect = wrapper.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const dx = mx - centerX;
+      const dy = my - centerY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+
+      const moveX = dx * speed;
+      const moveY = dy * speed;
+      
+      const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+      
+      const stretch = Math.min(1.15, 1 + (200 / (dist + 100)) * 0.1);
+      
+      blob.style.transform = `translate(${moveX}px, ${moveY}px) rotate(${angle}deg) scale(${stretch}, ${1/stretch})`;
+    });
+  }, { signal });
+}
+
+// Show critical warning for dangerous permission combinations or high-threat sites
+function showCriticalWarning(type = 'COMBO') {
+  if (document.getElementById('heliora-critical-warning')) return;
+
+  const overlay = document.createElement('div');
+  overlay.id = 'heliora-critical-warning';
+  
+  let title = 'Surveillance Attack Prevented';
+  let subtitle = 'HelioRa Security has intercepted a high-risk connection attempt.';
+  let threatTypeLabel = 'Surveillance Attack';
+  let messageContent = 'This website is attempting to activate multiple surveillance permissions simultaneously.';
+  let subtext = 'Requested: Camera + GPS + Fullscreen + Notifications';
+  
+  if (type === 'TUNNEL') {
+    title = 'CamPhish Tunnel Blocked';
+    subtitle = 'HelioRa detected a known CamPhish hosting pattern.';
+    threatTypeLabel = 'Tunnel Hosting (CamPhish)';
+    messageContent = 'This website is hosted on a temporary tunneling service used by attackers.';
+    subtext = 'Attackers use these ephemeral domains to bypass filters and steal camera/location data.';
+  }
+
+  const domain = window.location.hostname;
+
+  overlay.innerHTML = `
+    <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+      
+      #heliora-critical-warning {
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background-color: #050505 !important;
+        color: #FFD700 !important;
+        z-index: 2147483647 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+        overflow: hidden !important;
+      }
+
+      #heliora-jelly-container {
+        position: absolute !important;
+        top: 0 !important;
+        left: 0 !important;
+        width: 100% !important;
+        height: 100% !important;
+        z-index: 1 !important;
+        pointer-events: none !important;
+      }
+
+      .heliora-jelly-wrapper {
+        position: absolute !important;
+        pointer-events: auto !important;
+        transition: transform 0.1s ease-out !important; 
+      }
+
+      .heliora-jelly-blob {
+        width: 100% !important;
+        height: 100% !important;
+        background: rgba(255, 215, 0, 0.03) !important;
+        border: 1px solid rgba(255, 215, 0, 0.15) !important;
+        box-shadow: 0 0 30px rgba(255, 215, 0, 0.05) !important;
+        backdrop-filter: blur(8px) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        transition: all 0.3s ease !important;
+        overflow: hidden !important;
+      }
+      
+      .heliora-jelly-blob::after {
+          content: '' !important;
+          position: absolute !important;
+          top: 0; left: 0; right: 0; bottom: 0;
+          background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.1), transparent 60%) !important;
+          border-radius: inherit !important;
+          pointer-events: none !important;
+      }
+
+      .heliora-jelly-blob svg {
+        width: 40% !important;
+        height: 40% !important;
+        opacity: 0.5 !important;
+        transition: all 0.3s ease !important;
+        filter: drop-shadow(0 0 10px rgba(255,215,0,0.3)) !important;
+      }
+
+      .heliora-jelly-wrapper:hover .heliora-jelly-blob {
+          background: rgba(255, 215, 0, 0.08) !important;
+          border-color: rgba(255, 215, 0, 0.4) !important;
+          box-shadow: 
+            0 0 50px rgba(255, 215, 0, 0.15),
+            inset 0 0 30px rgba(255, 215, 0, 0.1) !important;
+      }
+
+      .heliora-jelly-wrapper:hover .heliora-jelly-blob svg {
+        opacity: 0.8 !important;
+        transform: scale(1.1) !important;
+        filter: drop-shadow(0 0 15px rgba(255,215,0,0.6)) !important;
+      }
+
+      /* Specific Shapes */
+      #jelly-cam {
+        top: 15%; left: 10%; width: 280px; height: 280px;
+        animation: float-1 12s infinite ease-in-out alternate;
+      }
+      #jelly-cam .heliora-jelly-blob { border-radius: 45% 55% 70% 30% / 30% 30% 70% 70%; }
+
+      #jelly-mic {
+        bottom: 15%; right: 15%; width: 320px; height: 320px;
+        animation: float-2 15s infinite ease-in-out alternate;
+      }
+      #jelly-mic .heliora-jelly-blob { border-radius: 60% 40% 30% 70% / 60% 30% 70% 40%; }
+
+      #jelly-eye {
+        top: 20%; right: 20%; width: 240px; height: 240px;
+        animation: float-3 10s infinite ease-in-out alternate;
+      }
+      #jelly-eye .heliora-jelly-blob { border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%; }
+      
+      #jelly-lock {
+        bottom: 25%; left: 25%; width: 200px; height: 200px;
+        animation: float-4 18s infinite ease-in-out alternate;
+      }
+      #jelly-lock .heliora-jelly-blob { border-radius: 50% 50% 20% 80% / 25% 80% 20% 75%; }
+
+      @keyframes float-1 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(30px, 50px) rotate(5deg); } }
+      @keyframes float-2 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-40px, -30px) rotate(-5deg); } }
+      @keyframes float-3 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(-20px, 40px) rotate(8deg); } }
+      @keyframes float-4 { 0% { transform: translate(0, 0) rotate(0deg); } 100% { transform: translate(40px, -40px) rotate(-8deg); } }
+
+      /* Card Styles */
+      .heliora-card {
+        background: rgba(20, 20, 20, 0.85) !important;
+        border: 1px solid rgba(255, 215, 0, 0.2) !important;
+        border-radius: 24px !important;
+        padding: 48px !important;
+        max-width: 550px !important;
+        width: 90% !important;
+        box-shadow: 
+          0 25px 50px -12px rgba(0, 0, 0, 0.8),
+          0 0 0 1px rgba(255, 215, 0, 0.1) !important;
+        text-align: center !important;
+        position: relative !important;
+        backdrop-filter: blur(20px) !important;
+        animation: heliora-slide-up 0.4s ease-out !important;
+        z-index: 10 !important;
+      }
+
+      @keyframes heliora-slide-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .heliora-card::before {
+        content: '' !important;
+        position: absolute !important;
+        top: 0 !important; left: 0 !important; right: 0 !important;
+        height: 3px !important;
+        background: linear-gradient(90deg, #FFD700, #FFA000) !important;
+        box-shadow: 0 0 15px rgba(255, 215, 0, 0.5) !important;
+      }
+
+      .heliora-icon-wrapper {
+        width: 80px !important;
+        height: 80px !important;
+        background: rgba(255, 215, 0, 0.1) !important;
+        border-radius: 50% !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 auto 24px auto !important;
+        border: 1px solid rgba(255, 215, 0, 0.3) !important;
+        animation: heliora-pulse-yellow 2s infinite !important;
+      }
+
+      @keyframes heliora-pulse-yellow {
+        0% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0.4); }
+        70% { box-shadow: 0 0 0 15px rgba(255, 215, 0, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(255, 215, 0, 0); }
+      }
+
+      .heliora-title {
+        font-size: 32px !important;
+        font-weight: 800 !important;
+        margin: 0 0 12px 0 !important;
+        color: #FFD700 !important;
+        letter-spacing: -0.02em !important;
+        line-height: 1.2 !important;
+        text-transform: uppercase !important;
+      }
+
+      .heliora-subtitle {
+        font-size: 16px !important;
+        color: #cccccc !important;
+        margin-bottom: 32px !important;
+        line-height: 1.5 !important;
+      }
+
+      .heliora-details-grid {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        background: rgba(255, 255, 255, 0.03) !important;
+        padding: 20px !important;
+        border-radius: 16px !important;
+        margin-bottom: 32px !important;
+        border: 1px solid rgba(255, 215, 0, 0.1) !important;
+        text-align: left !important;
+      }
+
+      .heliora-detail-row {
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 8px 0 !important;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1) !important;
+      }
+      .heliora-detail-row:last-child { border-bottom: none !important; }
+
+      .heliora-label {
+        color: #888888 !important;
+        font-size: 14px !important;
+        font-weight: 500 !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+      }
+
+      .heliora-value {
+        color: #ffffff !important;
+        font-size: 14px !important;
+        font-weight: 600 !important;
+        font-family: monospace !important;
+        max-width: 250px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        text-align: right !important;
+      }
+
+      .heliora-value.danger {
+        color: #FFD700 !important;
+        background: rgba(255, 215, 0, 0.15) !important;
+        padding: 4px 10px !important;
+        border-radius: 6px !important;
+        display: inline-block !important;
+        border: 1px solid rgba(255, 215, 0, 0.2) !important;
+      }
+
+      .heliora-message {
+        background: rgba(255, 215, 0, 0.05) !important;
+        border-left: 4px solid #FFD700 !important;
+        padding: 16px !important;
+        text-align: left !important;
+        border-radius: 0 8px 8px 0 !important;
+        margin-bottom: 32px !important;
+        color: #dddddd !important;
+        font-size: 14px !important;
+        line-height: 1.6 !important;
+      }
+      
+      .heliora-message strong { color: #FFD700 !important; }
+
+      .heliora-actions {
+        display: flex !important;
+        gap: 16px !important;
+        justify-content: center !important;
+      }
+
+      .heliora-btn {
+        padding: 14px 28px !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        font-size: 15px !important;
+        cursor: pointer !important;
+        transition: all 0.2s ease !important;
+        border: none !important;
+        outline: none !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.05em !important;
+      }
+
+      .heliora-btn-primary {
+        background: #FFD700 !important;
+        color: #000000 !important;
+        box-shadow: 0 4px 12px rgba(255, 215, 0, 0.3) !important;
+      }
+      .heliora-btn-primary:hover {
+        background: #ffea00 !important;
+        transform: translateY(-2px) !important;
+        box-shadow: 0 6px 16px rgba(255, 215, 0, 0.5) !important;
+      }
+
+      .heliora-btn-secondary {
+        background: transparent !important;
+        color: #FFD700 !important;
+        border: 1px solid rgba(255, 215, 0, 0.3) !important;
+      }
+      .heliora-btn-secondary:hover {
+        background: rgba(255, 215, 0, 0.1) !important;
+        transform: translateY(-2px) !important;
+        border-color: #FFD700 !important;
+      }
+
+      .heliora-footer {
+        margin-top: 24px !important;
+        font-size: 12px !important;
+        color: #666666 !important;
+        font-weight: 500 !important;
+        opacity: 0.8 !important;
+      }
+    </style>
+    
+    <div id="heliora-jelly-container">
+      <!-- Camera Jelly -->
+      <div id="jelly-cam" class="heliora-jelly-wrapper" data-speed="0.08">
+         <div class="heliora-jelly-blob">
+           <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"></path>
+             <circle cx="12" cy="13" r="4"></circle>
+           </svg>
+         </div>
+      </div>
+
+      <!-- Mic Jelly -->
+      <div id="jelly-mic" class="heliora-jelly-wrapper" data-speed="0.12">
+         <div class="heliora-jelly-blob">
+           <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+             <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+             <line x1="12" y1="19" x2="12" y2="23"></line>
+             <line x1="8" y1="23" x2="16" y2="23"></line>
+           </svg>
+         </div>
+      </div>
+
+      <!-- Eye Jelly -->
+      <div id="jelly-eye" class="heliora-jelly-wrapper" data-speed="0.10">
+         <div class="heliora-jelly-blob">
+           <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+             <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+             <circle cx="12" cy="12" r="3"></circle>
+           </svg>
+         </div>
+      </div>
+
+      <!-- Lock Jelly -->
+      <div id="jelly-lock" class="heliora-jelly-wrapper" data-speed="0.06">
+         <div class="heliora-jelly-blob">
+           <svg viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="1.5">
+             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+           </svg>
+         </div>
+      </div>
+    </div>
+
+    <div class="heliora-card">
+      <div class="heliora-icon-wrapper">
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#FFD700" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          <path d="M12 8v4"/>
+          <path d="M12 16h.01"/>
+        </svg>
+      </div>
+
+      <h1 class="heliora-title">${title}</h1>
+      <p class="heliora-subtitle">${subtitle}</p>
+
+      <div class="heliora-details-grid">
+        <div class="heliora-detail-row">
+          <span class="heliora-label">Domain</span>
+          <span class="heliora-value" title="${domain}">${domain}</span>
+        </div>
+        <div class="heliora-detail-row">
+          <span class="heliora-label">Threat Type</span>
+          <span class="heliora-value danger">${threatTypeLabel}</span>
+        </div>
+        <div class="heliora-detail-row">
+          <span class="heliora-label">Protection Level</span>
+          <span class="heliora-value" style="color: #4ade80 !important; text-shadow: 0 0 10px rgba(74, 222, 128, 0.3) !important;">MAXIMUM</span>
+        </div>
+      </div>
+
+      <div class="heliora-message">
+        <strong>⚠️ What was blocked:</strong><br>
+        ${messageContent}<br>
+        <span style="font-size: 13px; color: #aaa; margin-top: 5px; display: block;">${subtext}</span>
+      </div>
+
+      <div class="heliora-actions">
+        <button id="heliora_kill_tab" class="heliora-btn heliora-btn-primary">CLOSE TAB</button>
+        <button id="heliora_back_btn" class="heliora-btn heliora-btn-secondary">GO BACK</button>
+      </div>
+
+      <div class="heliora-footer">
+        Protected by HelioRa Security • Advanced Surveillance Defense
+      </div>
     </div>
   `;
 
   document.body.innerHTML = '';
-  document.body.appendChild(warning);
+  document.body.appendChild(overlay);
+  
+  initHelioRaJellyAnimation();
+  
+  document.getElementById('heliora_kill_tab').addEventListener('click', () => {
+      window.close();
+      window.location.href = "about:blank";
+  });
+  
+  document.getElementById('heliora_back_btn').addEventListener('click', () => {
+      window.history.back();
+  });
 }
 
 // Listen for privacy lockdown toggle
@@ -477,12 +859,20 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
 // Initial threat assessment
 const initialThreatScore = calculateThreatScore();
-if (initialThreatScore >= 70) {
+const initialDomain = window.location.hostname;
+
+if (isTunnelDomain(initialDomain) || initialThreatScore >= 70) {
   console.error('[HelioRa Surveillance] HIGH THREAT SITE DETECTED');
+
+  if (isTunnelDomain(initialDomain)) {
+    console.log('[HelioRa Surveillance] 🚨 BLOCKING CAMPHISH TUNNEL IMMEDIATELY');
+    showCriticalWarning('TUNNEL');
+  }
+
   chrome.runtime.sendMessage({
     action: 'highThreatSite',
     data: {
-      domain: window.location.hostname,
+      domain: initialDomain,
       url: window.location.href,
       threatScore: initialThreatScore,
       timestamp: new Date().toISOString()

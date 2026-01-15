@@ -439,5 +439,113 @@
       "urlFilter": "*gdpr*",
       "resourceTypes": ["script", "sub_frame"]
     }
+  },
+  {
+    "id": 4000,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ngrok.io^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4001,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||ngrok-free.app^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4002,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||serveo.net^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4003,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||loca.lt^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4004,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||localhost.run^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4005,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||trycloudflare.com^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4006,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||pagekite.me^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4007,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||tunnelto.dev^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4008,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||localtunnel.me^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4009,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||tunnel.pyjam.as^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4010,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "||burpcollaborator.net^",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket", "image", "media"]
+    }
+  },
+  {
+    "id": 4011,
+    "priority": 1,
+    "action": { "type": "block" },
+    "condition": {
+      "urlFilter": "*camphish*",
+      "resourceTypes": ["sub_frame", "script", "xmlhttprequest", "websocket"]
+    }
   }
 ]
